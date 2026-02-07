@@ -9,6 +9,8 @@ Launch Claude Code inside tmux with session management, real-time monitoring, an
 
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/probello3)
 
+![cctmux screenshot](https://raw.githubusercontent.com/paulrobello/cctmux/main/screenshot.png)
+
 ## Table of Contents
 
 - [Features](#features)

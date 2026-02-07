@@ -1,0 +1,110 @@
+[project]
+name = "cctmux"
+dynamic = ["version"]
+description = "Launch Claude Code inside tmux with session management"
+readme = "README.md"
+authors = [{ name = "Paul Robello", email = "probello@gmail.com" }]
+maintainers = [{ name = "Paul Robello", email = "probello@gmail.com" }]
+requires-python = ">=3.14"
+keywords = [
+    "claude",
+    "claude-code",
+    "tmux",
+    "terminal",
+    "session-management",
+    "cli",
+    "multiplexer",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Terminals",
+    "Topic :: Utilities",
+    "Typing :: Typed",
+]
+
+dependencies = [
+    "typer>=0.21.1",
+    "rich>=14.3.1",
+    "pyyaml>=6.0.2",
+    "xdg-base-dirs>=6.0.2",
+    "pydantic>=2.10.0",
+]
+
+[project.license]
+file = "LICENSE"
+
+[project.urls]
+Homepage = "https://github.com/paulrobello/cctmux"
+Documentation = "https://github.com/paulrobello/cctmux/blob/main/README.md"
+Source = "https://github.com/paulrobello/cctmux"
+Issues = "https://github.com/paulrobello/cctmux/issues"
+
+[project.scripts]
+cctmux = "cctmux.__main__:app"
+cctmux-tasks = "cctmux.__main__:tasks_app"
+cctmux-session = "cctmux.__main__:session_app"
+cctmux-agents = "cctmux.__main__:agents_app"
+cctmux-activity = "cctmux.__main__:activity_app"
+cctmux-ralph = "cctmux.__main__:ralph_app"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "ruff>=0.9.0",
+    "pyright>=1.1.390",
+    "pytest-cov>=7.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cctmux"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/cctmux",
+    "skill",
+    "LICENSE",
+    "README.md",
+    "pyproject.toml",
+]
+exclude = [
+    "*.pyc",
+    "__pycache__",
+    "*.so",
+    "*.dylib",
+]
+
+[tool.hatch.version]
+path = "src/cctmux/__init__.py"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-v"
+
+[tool.pyright]
+include = ["src"]
+pythonVersion = "3.14"
+typeCheckingMode = "strict"
+reportMissingTypeStubs = false
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]
+ignore = ["E501"]

@@ -126,6 +126,14 @@ activity_monitor:
 agent_monitor:
   inactive_timeout: 300.0  # seconds; 0 to disable
 
+# Git monitor settings
+git_monitor:
+  show_log: true
+  show_diff: true
+  show_status: true
+  max_commits: 10
+  poll_interval: 2.0
+
 # Ralph monitor settings
 ralph_monitor:
   show_table: true
@@ -164,6 +172,7 @@ custom_layouts: []
 | `dashboard` | Large activity dashboard with session sidebar |
 | `ralph` | Shell + ralph monitor side-by-side |
 | `ralph-full` | Shell + ralph monitor + task monitor |
+| `git-mon` | Claude + git status monitor |
 
 ## Monitor Configurations
 
@@ -214,6 +223,16 @@ custom_layouts: []
 |--------|------|---------|-------------|
 | `inactive_timeout` | float | `300.0` | Seconds before hiding inactive agents (0 to disable) |
 
+### Git Monitor (`git_monitor`)
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `show_log` | boolean | `true` | Show recent commits panel |
+| `show_diff` | boolean | `true` | Show diff stats panel |
+| `show_status` | boolean | `true` | Show file status panel |
+| `max_commits` | integer | `10` | Maximum recent commits to display |
+| `poll_interval` | float | `2.0` | Polling interval in seconds |
+
 ### Ralph Monitor (`ralph_monitor`)
 
 | Option | Type | Default | Description |
@@ -249,6 +268,9 @@ cctmux-session --preset minimal
 # Activity with debug preset
 cctmux-activity --preset debug
 
+# Git monitor with verbose preset
+cctmux-git --preset verbose
+
 # Ralph monitor with verbose preset
 cctmux-ralph --preset verbose
 ```
@@ -272,6 +294,10 @@ Reduces visual noise for focused work:
 **Activity Monitor:**
 - Hide heatmap
 - Hide tool usage
+
+**Git Monitor:**
+- Hide log and diff panels
+- Max 5 commits
 
 **Ralph Monitor:**
 - Hide timeline
@@ -298,6 +324,10 @@ Shows comprehensive information:
 - 14-day heatmap
 - Show all usage tables
 
+**Git Monitor:**
+- All panels visible
+- Max 20 commits
+
 **Ralph Monitor:**
 - Show table, timeline, prompt, task progress
 
@@ -320,6 +350,10 @@ Maximum detail for troubleshooting:
 **Activity Monitor:**
 - 30-day heatmap
 - All statistics visible
+
+**Git Monitor:**
+- All panels visible
+- Max 30 commits
 
 **Ralph Monitor:**
 - Show table, timeline, prompt, task progress

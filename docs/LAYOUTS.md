@@ -14,12 +14,13 @@ Complete reference for all cctmux predefined layouts. Each layout provides a dif
 - [Dashboard Layout](#dashboard-layout)
 - [Ralph Layout](#ralph-layout)
 - [Ralph-Full Layout](#ralph-full-layout)
+- [Git-Mon Layout](#git-mon-layout)
 - [Choosing a Layout](#choosing-a-layout)
 - [Related Documentation](#related-documentation)
 
 ## Overview
 
-cctmux provides nine predefined layouts that can be selected with the `--layout` or `-l` flag:
+cctmux provides ten predefined layouts that can be selected with the `--layout` or `-l` flag:
 
 ```bash
 cctmux -l <layout-name>
@@ -36,6 +37,7 @@ cctmux -l <layout-name>
 | `dashboard` | 3 | Usage review and statistics |
 | `ralph` | 2 | Ralph Loop with monitor dashboard |
 | `ralph-full` | 3 | Ralph Loop with monitor and task tracker |
+| `git-mon` | 2 | Claude Code with git status monitor |
 
 All layouts keep focus on the main Claude pane after creation, except `dashboard` which focuses the shell pane, and `ralph`/`ralph-full` which focus the shell pane for running `cctmux-ralph start`.
 
@@ -390,6 +392,39 @@ cctmux -l ralph-full
 cctmux-ralph start ralph-project.md --max-iterations 10
 ```
 
+## Git-Mon Layout
+
+Claude Code with a real-time git status monitor. Ideal for watching repository changes as Claude works.
+
+```bash
+cctmux -l git-mon
+```
+
+```
+┌──────────────────┬──────────────────┐
+│                  │                  │
+│                  │   cctmux-git     │
+│   Claude Code    │      40%         │
+│      60%         │                  │
+│                  │                  │
+│                  │                  │
+└──────────────────┴──────────────────┘
+```
+
+**Use Cases:**
+- Watching file changes as Claude edits code
+- Monitoring branch status and commit history
+- Tracking staged vs unstaged changes during development
+
+**Pane Structure:**
+| Pane | Content | Size |
+|------|---------|------|
+| 0.0 | Claude Code | 60% width |
+| 0.1 | `cctmux-git` | 40% width |
+
+**Monitors Launched:**
+- **Git Monitor**: Branch info, file status, recent commits, diff statistics
+
 ## Choosing a Layout
 
 ```
@@ -405,6 +440,9 @@ What do you need?
 │  ├─ 1 side process ────────→ editor
 │  ├─ 1 bottom bar ─────────→ monitor
 │  └─ 2 processes ──────────→ triple
+│
+├─ Want git status visible?
+│  └─ Yes ─────────────────→ git-mon
 │
 ├─ Running Ralph Loop?
 │  ├─ Basic monitoring ──────→ ralph
@@ -426,6 +464,7 @@ What do you need?
 | Review daily/weekly usage | `dashboard` |
 | Ralph Loop with live dashboard | `ralph` |
 | Ralph Loop with task tracking | `ralph-full` |
+| Watch git changes while coding | `git-mon` |
 
 ### Setting a Default Layout
 

@@ -22,13 +22,14 @@ uv run cctmux-agents      # Real-time subagent activity monitor
 uv run cctmux-ralph init  # Create a Ralph project template
 uv run cctmux-ralph start ralph-project.md  # Start a Ralph Loop
 uv run cctmux-ralph       # Monitor a running Ralph Loop
+uv run cctmux-git         # Real-time git status monitor
 ```
 
 ## Architecture
 
 ```
 src/cctmux/
-├── __main__.py         # Typer CLI: 6 apps (cctmux, cctmux-tasks, cctmux-session, cctmux-agents, cctmux-activity, cctmux-ralph)
+├── __main__.py         # Typer CLI: 7 apps (cctmux, cctmux-tasks, cctmux-session, cctmux-agents, cctmux-activity, cctmux-git, cctmux-ralph)
 ├── config.py           # Config model (Pydantic), LayoutType StrEnum, YAML load/save
 ├── session_history.py  # Session tracking with Pydantic models, stored in XDG data dir
 ├── tmux_manager.py     # Core tmux operations: create/attach sessions, status bar
@@ -38,17 +39,19 @@ src/cctmux/
 ├── activity_monitor.py # Usage statistics dashboard
 ├── ralph_runner.py     # Ralph Loop engine: state, task parsing, claude invocation, loop
 ├── ralph_monitor.py    # Ralph Loop live dashboard: status, tasks, timeline, iterations
-├── layouts.py          # Predefined layouts (default, editor, monitor, triple, cc-mon, full-monitor, dashboard, ralph, ralph-full)
+├── git_monitor.py      # Real-time git status monitor
+├── layouts.py          # Predefined layouts (default, editor, monitor, triple, cc-mon, full-monitor, dashboard, ralph, ralph-full, git-mon)
 ├── xdg_paths.py        # XDG-compliant paths for config/data directories
 └── utils.py            # Session name sanitization, fzf integration, path compression
 ```
 
-**Six Entry Points**:
+**Seven Entry Points**:
 - `cctmux` - Main CLI for tmux session management
 - `cctmux-tasks` - Task monitor for Claude Code TodoWrite tasks
 - `cctmux-session` - Session event monitor (shows thinking, tool calls, text output)
 - `cctmux-agents` - Subagent activity monitor
 - `cctmux-activity` - Usage statistics dashboard
+- `cctmux-git` - Real-time git repository status monitor
 - `cctmux-ralph` - Ralph Loop automation (start/monitor/cancel/status/init)
 
 **Data Flow**: CLI (`__main__.py`) → loads config → checks/creates tmux session via `tmux_manager.py` → applies layout → updates history

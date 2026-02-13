@@ -112,7 +112,7 @@ cctmux --dry-run
 
 ## Monitoring Tools
 
-cctmux provides five real-time monitoring tools to track Claude Code activity.
+cctmux provides six real-time monitoring tools to track Claude Code activity.
 
 ### Task Monitor
 
@@ -160,6 +160,20 @@ Features:
 - Token usage per agent
 - Current activity tracking
 - Configurable inactive timeout (default 5 minutes)
+
+### Git Monitor
+
+Monitor git repository status in real-time:
+
+```bash
+cctmux-git
+```
+
+Features:
+- Branch info with upstream tracking and ahead/behind counts
+- File status display (staged, unstaged, untracked)
+- Recent commits log with author and timestamps
+- Diff statistics with visual bars
 
 ### Activity Dashboard
 
@@ -209,7 +223,7 @@ cctmux-ralph cancel
 
 ## Layouts
 
-Predefined layouts arrange panes for common workflows. Nine layouts are available:
+Predefined layouts arrange panes for common workflows. Ten layouts are available:
 
 | Layout | Description |
 |--------|-------------|
@@ -222,6 +236,7 @@ Predefined layouts arrange panes for common workflows. Nine layouts are availabl
 | `dashboard` | Large activity dashboard with session sidebar |
 | `ralph` | Shell + ralph monitor side-by-side (60/40) |
 | `ralph-full` | Shell + ralph monitor + task monitor |
+| `git-mon` | Claude (60%) + git status monitor (40%) |
 
 ### CC-Mon Layout
 
@@ -319,6 +334,24 @@ cctmux -l ralph-full
 │              │ cctmux-     │
 │              │ tasks -g    │
 │              │   50%       │
+└──────────────┴─────────────┘
+```
+
+### Git-Mon Layout
+
+Claude Code + git status monitor:
+
+```bash
+cctmux -l git-mon
+```
+
+```
+┌──────────────┬─────────────┐
+│              │             │
+│   Claude     │ cctmux-     │
+│   60%        │ git         │
+│              │   40%       │
+│              │             │
 └──────────────┴─────────────┘
 ```
 

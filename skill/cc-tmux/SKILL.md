@@ -267,6 +267,7 @@ cctmux supports several predefined layouts via the `--layout` / `-l` option:
 | `dashboard` | Large activity dashboard with session sidebar |
 | `ralph` | Shell + ralph monitor side-by-side (60/40) |
 | `ralph-full` | Shell + ralph monitor + task monitor |
+| `git-mon` | Claude (60%) + git status monitor (40%) |
 
 ### CC-Mon Layout
 
@@ -817,6 +818,50 @@ cctmux-activity --preset verbose
 
 Activity data is read from `~/.claude/stats-cache.json`, which Claude Code updates automatically.
 
+## Git Monitor
+
+cctmux includes a real-time git monitor (`cctmux-git`) that displays repository status including branch info, file changes, recent commits, and diff statistics.
+
+### Running the Git Monitor
+
+```bash
+# Monitor current project directory
+cctmux-git
+
+# Monitor a specific repository
+cctmux-git -p /path/to/repo
+
+# Hide recent commits panel
+cctmux-git --no-log
+
+# Hide diff stats panel
+cctmux-git --no-diff
+
+# Show 20 recent commits
+cctmux-git -m 20
+
+# Use a preset configuration
+cctmux-git --preset minimal
+cctmux-git --preset verbose
+```
+
+### Git Monitor in a Pane
+
+Run the git monitor alongside your work:
+
+```bash
+# Create pane for git monitor, capture its ID
+GIT_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -p 40)
+tmux send-keys -t "$GIT_PANE" "cctmux-git" Enter
+```
+
+### Display Features
+
+- **Branch Panel**: Branch name, upstream tracking, ahead/behind counts, stash count, last commit
+- **Files Panel**: Changed files with status indicators (staged in green, unstaged in yellow, untracked in dim)
+- **Recent Commits Panel**: Commit hash, message, author, and relative timestamp
+- **Diff Stats Panel**: Per-file insertion/deletion counts with visual bars
+
 ## Subagent Monitor
 
 cctmux includes a real-time subagent monitor (`cctmux-agents`) that tracks activity across all Claude Code subagents spawned during a session. This is useful for monitoring parallel task execution and understanding subagent workload.
@@ -1007,7 +1052,7 @@ cctmux supports configuration via YAML file at `~/.config/cctmux/config.yaml`.
 # Default Claude arguments
 default_claude_args: ""
 
-# Default layout (default, editor, monitor, triple, cc-mon, full-monitor, dashboard)
+# Default layout (default, editor, monitor, triple, cc-mon, full-monitor, dashboard, ralph, ralph-full, git-mon)
 default_layout: default
 
 # Session monitor settings

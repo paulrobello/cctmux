@@ -10,13 +10,14 @@ Complete reference for all cctmux command-line tools. Each tool includes all ava
 - [cctmux-session](#cctmux-session)
 - [cctmux-agents](#cctmux-agents)
 - [cctmux-activity](#cctmux-activity)
+- [cctmux-git](#cctmux-git)
 - [cctmux-ralph](#cctmux-ralph)
 - [Common Patterns](#common-patterns)
 - [Related Documentation](#related-documentation)
 
 ## Overview
 
-cctmux provides six CLI commands:
+cctmux provides seven CLI commands:
 
 | Command | Purpose |
 |---------|---------|
@@ -25,6 +26,7 @@ cctmux provides six CLI commands:
 | `cctmux-session` | Monitor session events |
 | `cctmux-agents` | Monitor subagent activity |
 | `cctmux-activity` | Display usage statistics |
+| `cctmux-git` | Monitor git repository status |
 | `cctmux-ralph` | Ralph Loop automation (start, monitor, cancel, status, init) |
 
 All commands support `--version` and `--help` flags.
@@ -69,6 +71,7 @@ cctmux [OPTIONS] [COMMAND]
 | `dashboard` | Large activity dashboard with session sidebar |
 | `ralph` | Shell + ralph monitor side-by-side (60/40) |
 | `ralph-full` | Shell + ralph monitor + task monitor |
+| `git-mon` | Claude (60%) + git status monitor (40%) |
 
 ### Subcommands
 
@@ -88,6 +91,9 @@ cctmux -l editor
 
 # Start with monitoring layout
 cctmux -l cc-mon
+
+# Start with git monitor layout
+cctmux -l git-mon
 
 # Start with Ralph Loop layout
 cctmux -l ralph
@@ -386,6 +392,70 @@ cctmux-activity --preset minimal
 - **Model Usage Table**: Token breakdown by model with cost estimates
 - **Hourly Distribution**: Bar chart of activity by hour (optional)
 
+## cctmux-git
+
+Monitor git repository status with live updates. Shows branch info, file statuses, recent commits, and diff statistics.
+
+### Synopsis
+
+```bash
+cctmux-git [OPTIONS]
+```
+
+### Options
+
+| Option | Short | Description | Default |
+|--------|-------|-------------|---------|
+| `--project` | `-p` | Git repository directory | Current directory |
+| `--interval` | `-i` | Poll interval in seconds | `2.0` |
+| `--max-commits` | `-m` | Maximum recent commits to show | `10` |
+| `--no-log` | | Hide recent commits panel | `false` |
+| `--no-diff` | | Hide diff stats panel | `false` |
+| `--no-status` | | Hide file status panel | `false` |
+| `--preset` | | Use preset configuration (minimal, verbose, debug) | `None` |
+| `--version` | | Show version | |
+| `--help` | | Show help | |
+
+### Presets
+
+| Preset | Description |
+|--------|-------------|
+| `minimal` | Hide log and diff panels, show only branch and status; max 5 commits |
+| `verbose` | All panels visible; max 20 commits |
+| `debug` | All panels visible; max 30 commits |
+
+### Examples
+
+```bash
+# Monitor current directory
+cctmux-git
+
+# Monitor a specific repository
+cctmux-git -p /path/to/repo
+
+# Hide recent commits panel
+cctmux-git --no-log
+
+# Hide diff stats panel
+cctmux-git --no-diff
+
+# Show 20 recent commits
+cctmux-git -m 20
+
+# Use minimal preset
+cctmux-git --preset minimal
+
+# Fast polling (every 0.5 seconds)
+cctmux-git -i 0.5
+```
+
+### Display Features
+
+- **Branch Panel**: Branch name, upstream tracking, ahead/behind counts, stash count, last commit
+- **Files Panel**: Changed files with status indicators (staged, unstaged, untracked, renamed)
+- **Recent Commits Panel**: Commit hash, message, author, and relative timestamp
+- **Diff Stats Panel**: Per-file insertion/deletion counts with visual bars
+
 ## cctmux-ralph
 
 Ralph Loop: automated iterative Claude Code execution. Reads a project markdown file, runs Claude iteratively, tracks task completion and promises, and reports progress.
@@ -539,6 +609,14 @@ Monitor subagent activity during complex tasks:
 
 ```bash
 cctmux-agents
+```
+
+### Monitor Git Changes
+
+Watch git repository status while Claude works:
+
+```bash
+cctmux -l git-mon
 ```
 
 ### Weekly Usage Review

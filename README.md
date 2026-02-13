@@ -19,6 +19,7 @@ Launch Claude Code inside tmux with session management, real-time monitoring, an
 - [CLI Tools](#cli-tools)
 - [Layouts](#layouts)
 - [Monitoring Tools](#monitoring-tools)
+  - [Git Monitor](#git-monitor-cctmux-git)
   - [Ralph Monitor](#ralph-monitor-cctmux-ralph)
 - [Configuration](#configuration)
 - [Claude Skill](#claude-skill)
@@ -31,7 +32,7 @@ Launch Claude Code inside tmux with session management, real-time monitoring, an
 ## Features
 
 - **Session Management**: Create and attach to tmux sessions named after your project folder
-- **Predefined Layouts**: Choose from 9 layouts including monitoring-focused arrangements
+- **Predefined Layouts**: Choose from 10 layouts including monitoring-focused arrangements
 - **Real-time Monitors**: Track tasks, session events, subagents, usage statistics, and Ralph Loop progress
 - **Ralph Loop Automation**: Automated iterative Claude Code execution with task tracking and cost monitoring
 - **Claude Awareness**: Environment variables (`$CCTMUX_SESSION`, `$CCTMUX_PROJECT_DIR`) for Claude integration
@@ -49,6 +50,7 @@ graph TB
         Session[cctmux-session]
         Agents[cctmux-agents]
         Activity[cctmux-activity]
+        GitMon[cctmux-git]
         Ralph[cctmux-ralph]
     end
 
@@ -65,6 +67,10 @@ graph TB
         RalphState[Ralph State JSON]
     end
 
+    subgraph "External"
+        GitRepo[Git Repository]
+    end
+
     Main --> TmuxSession
     TmuxSession --> Panes
     Panes --> Claude
@@ -73,6 +79,7 @@ graph TB
     Session --> SessionFiles
     Agents --> SessionFiles
     Activity --> StatsCache
+    GitMon --> GitRepo
     Ralph --> RalphState
     Ralph --> Claude
 
@@ -81,6 +88,7 @@ graph TB
     style Session fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style Agents fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
     style Activity fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
+    style GitMon fill:#004d40,stroke:#00897b,stroke-width:2px,color:#ffffff
     style Ralph fill:#bf360c,stroke:#ff6d00,stroke-width:2px,color:#ffffff
     style TmuxSession fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style Panes fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
@@ -89,6 +97,7 @@ graph TB
     style SessionFiles fill:#1a237e,stroke:#3f51b5,stroke-width:2px,color:#ffffff
     style StatsCache fill:#1a237e,stroke:#3f51b5,stroke-width:2px,color:#ffffff
     style RalphState fill:#1a237e,stroke:#3f51b5,stroke-width:2px,color:#ffffff
+    style GitRepo fill:#004d40,stroke:#00897b,stroke-width:2px,color:#ffffff
 ```
 
 ## Installation
@@ -142,7 +151,7 @@ cctmux -l ralph
 
 ## CLI Tools
 
-cctmux provides six CLI commands:
+cctmux provides seven CLI commands:
 
 | Command | Purpose |
 |---------|---------|
@@ -151,6 +160,7 @@ cctmux provides six CLI commands:
 | `cctmux-session` | Monitor session events and statistics |
 | `cctmux-agents` | Monitor subagent activity |
 | `cctmux-activity` | Display usage statistics dashboard |
+| `cctmux-git` | Monitor git repository status in real-time |
 | `cctmux-ralph` | Ralph Loop automation (start, monitor, cancel, status, init) |
 
 ### cctmux
@@ -163,7 +173,7 @@ cctmux [OPTIONS]
 
 | Option | Short | Description |
 |--------|-------|-------------|
-| `--layout` | `-l` | Tmux layout (default, editor, monitor, triple, cc-mon, full-monitor, dashboard, ralph, ralph-full) |
+| `--layout` | `-l` | Tmux layout (default, editor, monitor, triple, cc-mon, full-monitor, dashboard, ralph, ralph-full, git-mon) |
 | `--recent` | `-r` | Select from recent sessions using fzf |
 | `--status-bar` | `-s` | Enable status bar with git/project info |
 | `--claude-args` | `-a` | Arguments to pass to claude command |
@@ -194,6 +204,7 @@ cctmux install-skill  # Install the cc-tmux skill for Claude
 | `dashboard` | Large activity dashboard with session sidebar |
 | `ralph` | Shell + ralph monitor side-by-side (60/40) |
 | `ralph-full` | Shell + ralph monitor + task monitor |
+| `git-mon` | Claude (60%) + git status monitor (40%) |
 
 ### CC-Mon Layout
 
@@ -288,6 +299,26 @@ cctmux-activity --no-cost       # Hide cost estimates
 - Activity heatmap visualization
 - Hourly distribution chart
 
+### Git Monitor (`cctmux-git`)
+
+Monitor git repository status in real-time.
+
+```bash
+cctmux-git                      # Monitor current directory
+cctmux-git -p /path/to/repo     # Monitor specific repo
+cctmux-git --no-log             # Hide recent commits
+cctmux-git --no-diff            # Hide diff stats
+cctmux-git -m 20                # Show 20 recent commits
+cctmux-git --preset minimal     # Minimal display
+```
+
+**Features:**
+- Branch info with upstream tracking and ahead/behind counts
+- File status display with staged, unstaged, and untracked indicators
+- Recent commits log with author and relative timestamps
+- Diff statistics with visual insertion/deletion bars
+- Stash count display
+
 ### Ralph Monitor (`cctmux-ralph`)
 
 Automated iterative Claude Code execution with live monitoring.
@@ -348,6 +379,14 @@ activity_monitor:
 agent_monitor:
   inactive_timeout: 300.0
 
+# Git monitor settings
+git_monitor:
+  show_log: true
+  show_diff: true
+  show_status: true
+  max_commits: 10
+  poll_interval: 2.0
+
 # Ralph monitor settings
 ralph_monitor:
   show_table: true
@@ -371,6 +410,7 @@ All monitors support `--preset` for quick configuration:
 cctmux-session --preset minimal
 cctmux-tasks --preset verbose
 cctmux-activity --preset debug
+cctmux-git --preset verbose
 cctmux-ralph --preset verbose
 ```
 
@@ -472,8 +512,8 @@ Full documentation is available in the `docs/` directory:
 
 - [Quick Start Guide](docs/QUICKSTART.md) - Get started in minutes
 - [Architecture](docs/ARCHITECTURE.md) - System design and data flow
-- [CLI Reference](docs/CLI_REFERENCE.md) - Complete reference for all six entry points
-- [Layouts Reference](docs/LAYOUTS.md) - All nine predefined layouts with diagrams
+- [CLI Reference](docs/CLI_REFERENCE.md) - Complete reference for all seven entry points
+- [Layouts Reference](docs/LAYOUTS.md) - All ten predefined layouts with diagrams
 - [Skill Guide](docs/SKILL_GUIDE.md) - Using the cc-tmux skill with Claude
 - [Configuration](docs/CONFIGURATION.md) - Configuration options and presets
 

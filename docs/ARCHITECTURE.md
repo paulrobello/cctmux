@@ -15,7 +15,7 @@ System design and data flow for cctmux. This document describes how the componen
 
 ## Overview
 
-cctmux is a CLI toolset that integrates Claude Code with tmux for enhanced session management and monitoring. The system consists of six CLI entry points that share common modules for configuration, session tracking, and display rendering.
+cctmux is a CLI toolset that integrates Claude Code with tmux for enhanced session management and monitoring. The system consists of seven CLI entry points that share common modules for configuration, session tracking, and display rendering.
 
 ```mermaid
 graph TB
@@ -35,6 +35,7 @@ graph TB
         SessionMon[Session Monitor]
         AgentMon[Subagent Monitor]
         ActivityMon[Activity Monitor]
+        GitMon[Git Monitor]
         RalphMon[Ralph Monitor]
     end
 
@@ -47,6 +48,7 @@ graph TB
         Tmux[tmux]
         ClaudeCode[Claude Code]
         ClaudeData[Claude Data Files]
+        GitRepo[Git Repository]
     end
 
     CLI --> Config
@@ -56,6 +58,7 @@ graph TB
     CLI --> SessionMon
     CLI --> AgentMon
     CLI --> ActivityMon
+    CLI --> GitMon
     CLI --> RalphRunner
     CLI --> RalphMon
 
@@ -66,11 +69,13 @@ graph TB
     SessionMon --> ClaudeData
     AgentMon --> ClaudeData
     ActivityMon --> ClaudeData
+    GitMon --> GitRepo
 
     TaskMon --> Term
     SessionMon --> Term
     AgentMon --> Term
     ActivityMon --> Term
+    GitMon --> Term
     RalphMon --> Term
     RalphRunner --> ClaudeCode
     RalphRunner --> RalphState
@@ -84,12 +89,14 @@ graph TB
     style SessionMon fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style AgentMon fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style ActivityMon fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
+    style GitMon fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style RalphMon fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style RalphRunner fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
     style RalphState fill:#1a237e,stroke:#3f51b5,stroke-width:2px,color:#ffffff
     style Tmux fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style ClaudeCode fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
     style ClaudeData fill:#1a237e,stroke:#3f51b5,stroke-width:2px,color:#ffffff
+    style GitRepo fill:#004d40,stroke:#00897b,stroke-width:2px,color:#ffffff
 ```
 
 ## Component Architecture
@@ -103,6 +110,7 @@ graph TB
 | `cctmux-session` | `__main__.py:session_app` | Session event monitor with statistics |
 | `cctmux-agents` | `__main__.py:agents_app` | Subagent activity monitor |
 | `cctmux-activity` | `__main__.py:activity_app` | Usage statistics dashboard |
+| `cctmux-git` | `__main__.py:git_app` | Real-time git repository status monitor |
 | `cctmux-ralph` | `__main__.py:ralph_app` | Ralph Loop automation with `start`, `init`, `cancel`, and `status` subcommands |
 
 ### Core Modules
@@ -120,6 +128,7 @@ graph LR
         SessionMon[session_monitor.py]
         AgentMon[subagent_monitor.py]
         ActivityMon[activity_monitor.py]
+        GitMon[git_monitor.py]
         RalphRunner[ralph_runner.py]
         RalphMon[ralph_monitor.py]
     end
@@ -137,6 +146,7 @@ graph LR
     Main --> SessionMon
     Main --> AgentMon
     Main --> ActivityMon
+    Main --> GitMon
     Main --> RalphRunner
     Main --> RalphMon
     Main --> Config
@@ -165,6 +175,7 @@ graph LR
     style SessionMon fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style AgentMon fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style ActivityMon fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
+    style GitMon fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style RalphRunner fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
     style RalphMon fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style Config fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
@@ -307,7 +318,7 @@ Project paths are encoded for Claude folder lookups by replacing `/` with `-`:
 ```
 src/cctmux/
 ├── __init__.py           # Package version
-├── __main__.py           # CLI entry points (6 Typer apps)
+├── __main__.py           # CLI entry points (7 Typer apps)
 ├── config.py             # Configuration models and presets
 ├── session_history.py    # Session tracking with Pydantic
 ├── tmux_manager.py       # Core tmux operations
@@ -316,6 +327,7 @@ src/cctmux/
 ├── session_monitor.py    # Session event monitor
 ├── subagent_monitor.py   # Subagent activity monitor
 ├── activity_monitor.py   # Usage dashboard
+├── git_monitor.py        # Real-time git status monitor
 ├── ralph_runner.py       # Ralph Loop engine
 ├── ralph_monitor.py      # Ralph Loop live dashboard
 ├── xdg_paths.py          # XDG-compliant path management
@@ -334,6 +346,7 @@ src/cctmux/
 | `session_monitor.py` | Parse JSONL events, compute statistics, cost estimation, path compression |
 | `subagent_monitor.py` | Discover and monitor subagent JSONL files, parse activity and token usage |
 | `activity_monitor.py` | Parse `stats-cache.json`, render heatmaps, model usage tables, hourly distribution |
+| `git_monitor.py` | Parse git status, diff stats, and log output; collect data via subprocess; build Rich display panels |
 | `ralph_runner.py` | Ralph Loop state management, project file parsing, claude CLI invocation, iteration tracking |
 | `ralph_monitor.py` | Real-time Ralph Loop dashboard with status, timeline, task progress, iteration table |
 | `xdg_paths.py` | Platform-appropriate config/data paths using `xdg-base-dirs` |
@@ -352,6 +365,7 @@ graph TD
     TMC[TaskMonitorConfig]
     AMC[ActivityMonitorConfig]
     AgMC[AgentMonitorConfig]
+    GMC[GitMonitorConfig]
     RMC[RalphMonitorConfig]
     CL[CustomLayout]
 
@@ -359,6 +373,7 @@ graph TD
     Config --> TMC
     Config --> AMC
     Config --> AgMC
+    Config --> GMC
     Config --> RMC
     Config --> CL
 
@@ -367,6 +382,7 @@ graph TD
     style TMC fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style AMC fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style AgMC fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
+    style GMC fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style RMC fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style CL fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
 ```
@@ -398,7 +414,7 @@ CLI arguments always override preset values when explicitly provided.
 
 ### Layout Types
 
-Nine predefined layouts are available, selected via the `--layout` / `-l` flag or the `default_layout` config option:
+Ten predefined layouts are available, selected via the `--layout` / `-l` flag or the `default_layout` config option:
 
 ```
 default          editor             monitor
@@ -428,6 +444,14 @@ dashboard               ralph                ralph-full
 │   70%         │Shell │ │  60% *   │        │ │  60% *   │cctmux- │
 │               │  *   │ │          │        │ │          │tasks   │
 └───────────────┴──────┘ └──────────┴────────┘ └──────────┴────────┘
+
+git-mon
+┌──────────┬────────┐
+│          │cctmux- │
+│ Claude   │git     │
+│  60%     │  40%   │
+│          │        │
+└──────────┴────────┘
          * = focused pane
 ```
 

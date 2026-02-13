@@ -21,6 +21,7 @@ class LayoutType(StrEnum):
     DASHBOARD = "dashboard"  # Large activity dashboard with session stats
     RALPH = "ralph"  # Shell + ralph monitor side-by-side
     RALPH_FULL = "ralph-full"  # Shell + ralph monitor + task monitor
+    GIT_MON = "git-mon"  # Claude + git monitor
 
 
 class ConfigPreset(StrEnum):
@@ -89,6 +90,16 @@ class AgentMonitorConfig(BaseModel):
     inactive_timeout: float = 300.0  # seconds; 0 to disable
 
 
+class GitMonitorConfig(BaseModel):
+    """Configuration for cctmux-git monitor."""
+
+    show_log: bool = True
+    show_diff: bool = True
+    show_status: bool = True
+    max_commits: int = 10
+    poll_interval: float = 2.0
+
+
 class CustomLayout(BaseModel):
     """Custom layout definition."""
 
@@ -112,6 +123,7 @@ class Config(BaseModel):
     activity_monitor: ActivityMonitorConfig = ActivityMonitorConfig()
     agent_monitor: AgentMonitorConfig = AgentMonitorConfig()
     ralph_monitor: RalphMonitorConfig = RalphMonitorConfig()
+    git_monitor: GitMonitorConfig = GitMonitorConfig()
 
     # Custom layouts
     custom_layouts: list[CustomLayout] = []
@@ -194,6 +206,11 @@ def get_preset_config(preset: ConfigPreset) -> Config:
                 show_timeline=False,
                 show_prompt=False,
             ),
+            git_monitor=GitMonitorConfig(
+                show_log=False,
+                show_diff=False,
+                max_commits=5,
+            ),
         )
     elif preset == ConfigPreset.VERBOSE:
         return Config(
@@ -232,6 +249,12 @@ def get_preset_config(preset: ConfigPreset) -> Config:
                 show_timeline=True,
                 show_prompt=True,
                 show_task_progress=True,
+            ),
+            git_monitor=GitMonitorConfig(
+                show_log=True,
+                show_diff=True,
+                show_status=True,
+                max_commits=20,
             ),
         )
     elif preset == ConfigPreset.DEBUG:
@@ -274,6 +297,12 @@ def get_preset_config(preset: ConfigPreset) -> Config:
                 show_prompt=True,
                 show_task_progress=True,
                 max_iterations_visible=50,
+            ),
+            git_monitor=GitMonitorConfig(
+                show_log=True,
+                show_diff=True,
+                show_status=True,
+                max_commits=30,
             ),
         )
     # Default preset

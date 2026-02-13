@@ -5,7 +5,7 @@ from pathlib import Path
 
 import yaml
 
-from cctmux.config import Config, LayoutType, load_config, save_config
+from cctmux.config import Config, GitMonitorConfig, LayoutType, load_config, save_config
 
 
 class TestConfig:
@@ -115,3 +115,36 @@ class TestSaveConfig:
             config = Config()
             save_config(config, config_path)
             assert config_path.exists()
+
+
+class TestGitMonitorConfig:
+    """Tests for GitMonitorConfig model."""
+
+    def test_default_values(self) -> None:
+        """Should have correct default values."""
+        config = GitMonitorConfig()
+        assert config.show_log is True
+        assert config.show_diff is True
+        assert config.show_status is True
+        assert config.max_commits == 10
+        assert config.poll_interval == 2.0
+
+    def test_custom_values(self) -> None:
+        """Should accept custom values."""
+        config = GitMonitorConfig(show_log=False, max_commits=5)
+        assert config.show_log is False
+        assert config.max_commits == 5
+
+
+class TestLayoutTypeGitMon:
+    """Tests for git-mon layout type."""
+
+    def test_git_mon_value(self) -> None:
+        """Should have git-mon enum value."""
+        assert LayoutType.GIT_MON.value == "git-mon"
+
+    def test_config_includes_git_monitor(self) -> None:
+        """Config should include git_monitor field."""
+        config = Config()
+        assert hasattr(config, "git_monitor")
+        assert isinstance(config.git_monitor, GitMonitorConfig)

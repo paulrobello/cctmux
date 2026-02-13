@@ -61,7 +61,7 @@ def install_skill() -> None:
     """Install the cc-tmux skill to ~/.claude/skills/."""
     import shutil
 
-    skill_src = Path(__file__).parent.parent.parent / "skill" / "cc-tmux"
+    skill_src = Path(__file__).parent / "skill" / "cc-tmux"
     skill_dest = Path.home() / ".claude" / "skills" / "cc-tmux"
 
     if not skill_src.exists():

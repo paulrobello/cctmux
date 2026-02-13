@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import subprocess
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
 from cctmux.git_monitor import (
     CommitInfo,
     DiffStat,
     FileChange,
     FileStatus,
     GitStatus,
+    _run_git_command,
+    collect_git_status,
     parse_diff_stat,
     parse_log_output,
     parse_porcelain_status,
@@ -312,3 +318,70 @@ class TestParseLogOutput:
         commits = parse_log_output(output)
         assert len(commits) == 1
         assert commits[0].short_hash == "abc1234"
+
+
+class TestRunGitCommand:
+    """Tests for _run_git_command helper."""
+
+    def test_successful_command(self, tmp_path: Path) -> None:
+        with patch("cctmux.git_monitor.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout="output\n", stderr=""
+            )
+            result = _run_git_command(["status"], tmp_path)
+            assert result == "output\n"
+
+    def test_failed_command_returns_empty(self, tmp_path: Path) -> None:
+        with patch("cctmux.git_monitor.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=128, stdout="", stderr="fatal: not a git repo"
+            )
+            result = _run_git_command(["status"], tmp_path)
+            assert result == ""
+
+    def test_exception_returns_empty(self, tmp_path: Path) -> None:
+        with patch("cctmux.git_monitor.subprocess.run") as mock_run:
+            mock_run.side_effect = FileNotFoundError("git not found")
+            result = _run_git_command(["status"], tmp_path)
+            assert result == ""
+
+    def test_timeout_returns_empty(self, tmp_path: Path) -> None:
+        with patch("cctmux.git_monitor.subprocess.run") as mock_run:
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd="git", timeout=10)
+            result = _run_git_command(["status"], tmp_path)
+            assert result == ""
+
+
+class TestCollectGitStatus:
+    """Tests for collect_git_status function."""
+
+    def test_collects_all_data(self, tmp_path: Path) -> None:
+        """Should call all git commands and assemble GitStatus."""
+        porcelain = (
+            "# branch.oid abc123\n"
+            "# branch.head main\n"
+            "# branch.upstream origin/main\n"
+            "# branch.ab +0 -0\n"
+        )
+        log_line = "abc1234|5 min ago|init|Author\n"
+
+        def mock_run(args: list[str], **kwargs: object) -> MagicMock:
+            cmd_str = " ".join(str(a) for a in args)
+            if "status --porcelain" in cmd_str:
+                return MagicMock(returncode=0, stdout=porcelain, stderr="")
+            if "stash list" in cmd_str:
+                return MagicMock(returncode=0, stdout="", stderr="")
+            if "log -1" in cmd_str:
+                return MagicMock(returncode=0, stdout=log_line, stderr="")
+            if "log --format" in cmd_str:
+                return MagicMock(returncode=0, stdout=log_line, stderr="")
+            if "diff --cached" in cmd_str:
+                return MagicMock(returncode=0, stdout="", stderr="")
+            if "diff --stat" in cmd_str:
+                return MagicMock(returncode=0, stdout="", stderr="")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("cctmux.git_monitor.subprocess.run", side_effect=mock_run):
+            status = collect_git_status(tmp_path, max_commits=10)
+            assert status.branch == "main"
+            assert status.upstream == "origin/main"

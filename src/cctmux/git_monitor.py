@@ -1,12 +1,14 @@
 """Git monitor data models and parsing functions.
 
-Provides dataclasses and parsers for git status, diff stats, and log output.
-No display or subprocess code - only data models and pure parsing functions.
+Provides dataclasses and parsers for git status, diff stats, and log output,
+plus subprocess-based data collection.
 """
 
 import re
+import subprocess
 from dataclasses import dataclass, field
 from enum import StrEnum
+from pathlib import Path
 
 
 class FileStatus(StrEnum):
@@ -280,3 +282,75 @@ def parse_log_output(output: str) -> list[CommitInfo]:
         )
 
     return commits
+
+
+def _run_git_command(args: list[str], repo_path: Path) -> str:
+    """Run a git command and return stdout.
+
+    Args:
+        args: Git subcommand and arguments (without 'git').
+        repo_path: Path to the git repository.
+
+    Returns:
+        stdout string, or empty string on failure.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo_path), *args],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            return ""
+        return result.stdout
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return ""
+
+
+def collect_git_status(repo_path: Path, max_commits: int = 10) -> GitStatus:
+    """Collect git status by running git commands.
+
+    Args:
+        repo_path: Path to the git repository.
+        max_commits: Maximum number of recent commits to fetch.
+
+    Returns:
+        GitStatus with all collected data.
+    """
+    # Parse porcelain status (branch + files)
+    porcelain = _run_git_command(["status", "--porcelain=v2", "--branch"], repo_path)
+    status = parse_porcelain_status(porcelain)
+
+    # Stash count
+    stash_output = _run_git_command(["stash", "list"], repo_path)
+    status.stash_count = len(
+        [line for line in stash_output.strip().splitlines() if line]
+    )
+
+    # Last commit info
+    last_commit = _run_git_command(
+        ["log", "-1", "--format=%h|%cr|%s|%an"], repo_path
+    )
+    if last_commit.strip():
+        parts = last_commit.strip().split("|", 3)
+        if len(parts) == 4:
+            status.last_commit_hash = parts[0]
+            status.last_commit_time = parts[1]
+            status.last_commit_message = parts[2]
+            status.last_commit_author = parts[3]
+
+    # Recent commits
+    log_output = _run_git_command(
+        ["log", f"--format=%h|%cr|%s|%an", f"-{max_commits}"], repo_path
+    )
+    status.commits = parse_log_output(log_output)
+
+    # Diff stats
+    unstaged = _run_git_command(["diff", "--stat"], repo_path)
+    status.unstaged_diff = parse_diff_stat(unstaged)
+
+    staged = _run_git_command(["diff", "--cached", "--stat"], repo_path)
+    status.staged_diff = parse_diff_stat(staged)
+
+    return status

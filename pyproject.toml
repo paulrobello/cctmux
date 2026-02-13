@@ -5,7 +5,7 @@ description = "Launch Claude Code inside tmux with session management"
 readme = "README.md"
 authors = [{ name = "Paul Robello", email = "probello@gmail.com" }]
 maintainers = [{ name = "Paul Robello", email = "probello@gmail.com" }]
-requires-python = ">=3.14"
+requires-python = ">=3.13"
 keywords = [
     "claude",
     "claude-code",
@@ -23,7 +23,7 @@ classifiers = [
     "Operating System :: MacOS",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Terminals",
     "Topic :: Utilities",
     "Typing :: Typed",
@@ -97,13 +97,13 @@ addopts = "-v"
 
 [tool.pyright]
 include = ["src"]
-pythonVersion = "3.14"
+pythonVersion = "3.13"
 typeCheckingMode = "strict"
 reportMissingTypeStubs = false
 
 [tool.ruff]
 line-length = 120
-target-version = "py314"
+target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]

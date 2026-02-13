@@ -163,7 +163,7 @@ def _parse_timestamp(ts_str: str) -> datetime:
     try:
         ts_str = ts_str.replace("Z", "+00:00")
         return datetime.fromisoformat(ts_str)
-    except ValueError, AttributeError:
+    except (ValueError, AttributeError):
         return datetime.min
 
 
@@ -415,7 +415,7 @@ def find_subagent_files(
                             data = json.loads(first_line)
                             if data.get("sessionId") != session_id:
                                 continue
-                except json.JSONDecodeError, OSError:
+                except (json.JSONDecodeError, OSError):
                     continue
             agent_files.append(agent_file)
 
@@ -625,7 +625,7 @@ def get_terminal_size() -> tuple[int, int]:
     try:
         size = shutil.get_terminal_size()
         return size.columns, size.lines
-    except AttributeError, ValueError:
+    except (AttributeError, ValueError):
         return 80, 24
 
 

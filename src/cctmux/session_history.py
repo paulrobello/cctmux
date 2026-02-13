@@ -42,7 +42,7 @@ def load_history(history_path: Path | None = None) -> SessionHistory:
         with path.open(encoding="utf-8") as f:
             data: dict[str, object] = yaml.safe_load(f) or {}
         return SessionHistory.model_validate(data)
-    except yaml.YAMLError, ValueError:
+    except (yaml.YAMLError, ValueError):
         return SessionHistory()
 
 

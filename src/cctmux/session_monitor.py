@@ -125,7 +125,7 @@ def _parse_timestamp(ts_str: str) -> datetime:
         # Handle Z suffix
         ts_str = ts_str.replace("Z", "+00:00")
         return datetime.fromisoformat(ts_str)
-    except ValueError, AttributeError:
+    except (ValueError, AttributeError):
         return datetime.min
 
 
@@ -812,7 +812,7 @@ def get_terminal_size() -> tuple[int, int]:
     try:
         size = shutil.get_terminal_size()
         return size.columns, size.lines
-    except AttributeError, ValueError:
+    except (AttributeError, ValueError):
         return 80, 24
 
 

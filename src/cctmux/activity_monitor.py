@@ -220,7 +220,7 @@ def load_stats_cache() -> ActivityStats | None:
     try:
         with stats_file.open("r", encoding="utf-8") as f:
             data = json.load(f)
-    except json.JSONDecodeError, OSError:
+    except (json.JSONDecodeError, OSError):
         return None
 
     # Parse daily activity

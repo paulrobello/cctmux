@@ -593,3 +593,64 @@ def build_display(
         panels.append(build_diff_panel(status))
 
     return Group(*panels)
+
+
+def run_git_monitor(
+    repo_path: Path | None = None,
+    poll_interval: float = 2.0,
+    max_commits: int = 10,
+    show_log: bool = True,
+    show_diff: bool = True,
+    show_status: bool = True,
+) -> None:
+    """Run the git monitor with Rich Live.
+
+    Args:
+        repo_path: Path to git repository (default: cwd).
+        poll_interval: How often to poll for changes (seconds).
+        max_commits: Maximum recent commits to show.
+        show_log: Whether to show recent commits panel.
+        show_diff: Whether to show diff stats panel.
+        show_status: Whether to show file status panel.
+    """
+    import time
+
+    from rich.console import Console
+    from rich.live import Live
+
+    console = Console()
+    effective_path = repo_path or Path.cwd()
+
+    # Verify it's a git repo
+    test = _run_git_command(["rev-parse", "--git-dir"], effective_path)
+    if not test:
+        console.print(f"[red]Not a git repository:[/] {effective_path}")
+        return
+
+    console.clear()
+    console.print(f"[bold cyan]Git Monitor[/] - {effective_path.name}")
+    console.print("[dim]Press Ctrl+C to exit[/]\n")
+
+    try:
+        status = collect_git_status(effective_path, max_commits)
+        display = build_display(
+            status,
+            show_log=show_log,
+            show_diff=show_diff,
+            show_status=show_status,
+        )
+
+        with Live(display, console=console, refresh_per_second=1) as live:
+            while True:
+                time.sleep(poll_interval)
+                status = collect_git_status(effective_path, max_commits)
+                live.update(
+                    build_display(
+                        status,
+                        show_log=show_log,
+                        show_diff=show_diff,
+                        show_status=show_status,
+                    )
+                )
+    except KeyboardInterrupt:
+        console.print("\n[dim]Monitor stopped.[/]")

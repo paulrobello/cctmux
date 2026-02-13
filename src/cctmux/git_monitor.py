@@ -10,6 +10,11 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
+from rich.console import Group
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
+
 
 class FileStatus(StrEnum):
     """Git file status categories."""
@@ -354,3 +359,237 @@ def collect_git_status(repo_path: Path, max_commits: int = 10) -> GitStatus:
     status.staged_diff = parse_diff_stat(staged)
 
     return status
+
+
+# Mapping from FileStatus to (icon, color) for display
+_STATUS_DISPLAY: dict[FileStatus, tuple[str, str]] = {
+    FileStatus.STAGED_ADDED: ("A", "green"),
+    FileStatus.STAGED_MODIFIED: ("M", "green"),
+    FileStatus.STAGED_DELETED: ("D", "green"),
+    FileStatus.STAGED_RENAMED: ("R", "green"),
+    FileStatus.STAGED_COPIED: ("C", "green"),
+    FileStatus.MODIFIED: ("M", "yellow"),
+    FileStatus.DELETED: ("D", "red"),
+    FileStatus.UNTRACKED: ("?", "dim"),
+    FileStatus.RENAMED: ("R", "yellow"),
+    FileStatus.COPIED: ("C", "yellow"),
+}
+
+
+def build_branch_panel(status: GitStatus) -> Panel:
+    """Build a Rich panel showing branch information.
+
+    Args:
+        status: Collected git status data.
+
+    Returns:
+        Panel with branch name, upstream info, stash count, and last commit.
+    """
+    text = Text()
+
+    # Branch name
+    text.append(status.branch or "(detached)", style="bold cyan")
+
+    # Upstream with ahead/behind
+    if status.upstream:
+        text.append("  ")
+        text.append(status.upstream, style="dim")
+        arrows: list[str] = []
+        if status.ahead > 0:
+            arrows.append(f"\u2191{status.ahead}")
+        if status.behind > 0:
+            arrows.append(f"\u2193{status.behind}")
+        if arrows:
+            text.append("  ")
+            text.append(" ".join(arrows), style="bold yellow")
+
+    text.append("\n")
+
+    # Stash count
+    if status.stash_count > 0:
+        text.append(f"Stash: {status.stash_count}\n", style="dim yellow")
+
+    # Last commit
+    if status.last_commit_hash:
+        text.append(status.last_commit_hash, style="cyan")
+        text.append(" ")
+        text.append(status.last_commit_message)
+        text.append(" (", style="dim")
+        text.append(status.last_commit_author, style="dim magenta")
+        text.append(", ", style="dim")
+        text.append(status.last_commit_time, style="dim")
+        text.append(")", style="dim")
+
+    return Panel(text, title="Branch", border_style="cyan")
+
+
+def build_status_panel(status: GitStatus) -> Panel:
+    """Build a Rich panel showing file status.
+
+    Args:
+        status: Collected git status data.
+
+    Returns:
+        Panel with a table of changed files grouped by status.
+    """
+    if not status.files:
+        return Panel(
+            Text("Working tree clean", style="dim"),
+            title="Files",
+            border_style="green",
+        )
+
+    table = Table(show_header=False, show_edge=False, box=None, padding=(0, 1))
+    table.add_column("Status", width=2, no_wrap=True)
+    table.add_column("File")
+
+    # Count by category for subtitle
+    staged_count = 0
+    unstaged_count = 0
+    untracked_count = 0
+
+    for f in status.files:
+        icon, color = _STATUS_DISPLAY.get(f.status, ("?", "dim"))
+        display_path = f.path
+        if f.original_path:
+            display_path = f"{f.original_path} -> {f.path}"
+        table.add_row(
+            Text(icon, style=color),
+            Text(display_path),
+        )
+        if f.status in (
+            FileStatus.STAGED_ADDED,
+            FileStatus.STAGED_MODIFIED,
+            FileStatus.STAGED_DELETED,
+            FileStatus.STAGED_RENAMED,
+            FileStatus.STAGED_COPIED,
+        ):
+            staged_count += 1
+        elif f.status == FileStatus.UNTRACKED:
+            untracked_count += 1
+        else:
+            unstaged_count += 1
+
+    parts: list[str] = []
+    if staged_count:
+        parts.append(f"{staged_count} staged")
+    if unstaged_count:
+        parts.append(f"{unstaged_count} unstaged")
+    if untracked_count:
+        parts.append(f"{untracked_count} untracked")
+    subtitle = ", ".join(parts) if parts else None
+
+    return Panel(table, title="Files", subtitle=subtitle, border_style="green")
+
+
+def build_log_panel(status: GitStatus) -> Panel:
+    """Build a Rich panel showing recent commits.
+
+    Args:
+        status: Collected git status data.
+
+    Returns:
+        Panel with a list of recent commits.
+    """
+    if not status.commits:
+        return Panel(
+            Text("No commits", style="dim"),
+            title="Recent Commits",
+            border_style="yellow",
+        )
+
+    text = Text()
+    for i, commit in enumerate(status.commits):
+        if i > 0:
+            text.append("\n")
+        text.append(commit.short_hash, style="cyan")
+        text.append(" ")
+        text.append(commit.message)
+        text.append(" (", style="dim")
+        text.append(commit.author, style="dim")
+        text.append(", ", style="dim")
+        text.append(commit.relative_time, style="dim")
+        text.append(")", style="dim")
+
+    return Panel(text, title="Recent Commits", border_style="yellow")
+
+
+def build_diff_panel(status: GitStatus) -> Panel:
+    """Build a Rich panel showing diff statistics.
+
+    Args:
+        status: Collected git status data.
+
+    Returns:
+        Panel with staged and unstaged diff stats including visual bars.
+    """
+    if not status.staged_diff and not status.unstaged_diff:
+        return Panel(
+            Text("No changes", style="dim"),
+            title="Diff Stats",
+            border_style="blue",
+        )
+
+    table = Table(show_header=False, show_edge=False, box=None, padding=(0, 1))
+    table.add_column("File")
+    table.add_column("Changes", justify="right", no_wrap=True)
+    table.add_column("Bar", no_wrap=True)
+
+    max_bar_width = 30
+
+    def _add_diff_rows(diffs: list[DiffStat]) -> None:
+        """Add diff stat rows to the table."""
+        for diff in diffs:
+            total = diff.insertions + diff.deletions
+            changes_text = Text(str(total), style="bold")
+
+            # Build visual bar
+            bar = Text()
+            if total > 0:
+                scale = min(max_bar_width, total) / total if total > 0 else 0
+                plus_count = max(1, round(diff.insertions * scale)) if diff.insertions > 0 else 0
+                minus_count = max(1, round(diff.deletions * scale)) if diff.deletions > 0 else 0
+                bar.append("+" * plus_count, style="green")
+                bar.append("-" * minus_count, style="red")
+            table.add_row(Text(diff.path), changes_text, bar)
+
+    if status.staged_diff:
+        table.add_row(Text("Staged", style="bold green"), Text(""), Text(""))
+        _add_diff_rows(status.staged_diff)
+
+    if status.unstaged_diff:
+        table.add_row(Text("Unstaged", style="bold yellow"), Text(""), Text(""))
+        _add_diff_rows(status.unstaged_diff)
+
+    return Panel(table, title="Diff Stats", border_style="blue")
+
+
+def build_display(
+    status: GitStatus,
+    show_log: bool = True,
+    show_diff: bool = True,
+    show_status: bool = True,
+) -> Group:
+    """Compose git status panels into a Rich Group.
+
+    Args:
+        status: Collected git status data.
+        show_log: Whether to include the recent commits panel.
+        show_diff: Whether to include the diff stats panel.
+        show_status: Whether to include the file status panel.
+
+    Returns:
+        Group of Rich panels for display.
+    """
+    panels: list[Panel] = [build_branch_panel(status)]
+
+    if show_status:
+        panels.append(build_status_panel(status))
+
+    if show_log:
+        panels.append(build_log_panel(status))
+
+    if show_diff:
+        panels.append(build_diff_panel(status))
+
+    return Group(*panels)

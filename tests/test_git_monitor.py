@@ -6,6 +6,9 @@ import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from rich.console import Group
+from rich.panel import Panel
+
 from cctmux.git_monitor import (
     CommitInfo,
     DiffStat,
@@ -13,6 +16,11 @@ from cctmux.git_monitor import (
     FileStatus,
     GitStatus,
     _run_git_command,
+    build_branch_panel,
+    build_diff_panel,
+    build_display,
+    build_log_panel,
+    build_status_panel,
     collect_git_status,
     parse_diff_stat,
     parse_log_output,
@@ -385,3 +393,104 @@ class TestCollectGitStatus:
             status = collect_git_status(tmp_path, max_commits=10)
             assert status.branch == "main"
             assert status.upstream == "origin/main"
+
+
+def _make_status(**kwargs: object) -> GitStatus:
+    """Helper to create GitStatus with defaults."""
+    defaults: dict[str, object] = {
+        "branch": "main",
+        "upstream": "origin/main",
+        "ahead": 0,
+        "behind": 0,
+        "files": [],
+        "stash_count": 0,
+        "commits": [],
+        "staged_diff": [],
+        "unstaged_diff": [],
+        "last_commit_hash": "abc1234",
+        "last_commit_message": "init commit",
+        "last_commit_author": "Author",
+        "last_commit_time": "5 minutes ago",
+    }
+    defaults.update(kwargs)
+    return GitStatus(**defaults)  # type: ignore[arg-type]
+
+
+class TestBuildBranchPanel:
+    """Tests for build_branch_panel."""
+
+    def test_returns_panel(self) -> None:
+        status = _make_status()
+        panel = build_branch_panel(status)
+        assert isinstance(panel, Panel)
+
+
+class TestBuildStatusPanel:
+    """Tests for build_status_panel."""
+
+    def test_empty_status(self) -> None:
+        status = _make_status(files=[])
+        panel = build_status_panel(status)
+        assert isinstance(panel, Panel)
+
+    def test_with_files(self) -> None:
+        files = [
+            FileChange(path="a.py", status=FileStatus.MODIFIED),
+            FileChange(path="b.py", status=FileStatus.UNTRACKED),
+        ]
+        status = _make_status(files=files)
+        panel = build_status_panel(status)
+        assert isinstance(panel, Panel)
+
+
+class TestBuildLogPanel:
+    """Tests for build_log_panel."""
+
+    def test_empty_log(self) -> None:
+        status = _make_status(commits=[])
+        panel = build_log_panel(status)
+        assert isinstance(panel, Panel)
+
+    def test_with_commits(self) -> None:
+        commits = [
+            CommitInfo(
+                short_hash="abc1234",
+                relative_time="5 min ago",
+                message="feat: x",
+                author="A",
+            ),
+        ]
+        status = _make_status(commits=commits)
+        panel = build_log_panel(status)
+        assert isinstance(panel, Panel)
+
+
+class TestBuildDiffPanel:
+    """Tests for build_diff_panel."""
+
+    def test_empty_diff(self) -> None:
+        status = _make_status()
+        panel = build_diff_panel(status)
+        assert isinstance(panel, Panel)
+
+    def test_with_diffs(self) -> None:
+        diffs = [DiffStat(path="a.py", insertions=10, deletions=3)]
+        status = _make_status(unstaged_diff=diffs)
+        panel = build_diff_panel(status)
+        assert isinstance(panel, Panel)
+
+
+class TestBuildDisplay:
+    """Tests for build_display."""
+
+    def test_returns_group(self) -> None:
+        status = _make_status()
+        display = build_display(status)
+        assert isinstance(display, Group)
+
+    def test_respects_show_flags(self) -> None:
+        status = _make_status()
+        display = build_display(
+            status, show_log=False, show_diff=False, show_status=False
+        )
+        assert isinstance(display, Group)

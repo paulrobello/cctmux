@@ -52,6 +52,7 @@ cctmux-tasks = "cctmux.__main__:tasks_app"
 cctmux-session = "cctmux.__main__:session_app"
 cctmux-agents = "cctmux.__main__:agents_app"
 cctmux-activity = "cctmux.__main__:activity_app"
+cctmux-git = "cctmux.__main__:git_app"
 cctmux-ralph = "cctmux.__main__:ralph_app"
 
 [dependency-groups]

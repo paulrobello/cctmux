@@ -33,6 +33,7 @@ from cctmux.subagent_monitor import (
     list_subagents,
     run_subagent_monitor,
 )
+from cctmux.git_monitor import run_git_monitor
 from cctmux.task_monitor import list_sessions, run_monitor
 from cctmux.tmux_manager import attach_session, create_session, is_inside_tmux, session_exists
 from cctmux.utils import get_project_name, is_fzf_available, sanitize_session_name, select_with_fzf
@@ -701,6 +702,97 @@ def activity_main(
         show_cost=effective_show_cost,
         show_model_usage=effective_show_model_usage,
         show_hour_distribution=show_hourly,
+    )
+
+
+git_app = typer.Typer(
+    name="cctmux-git",
+    help="Monitor git repository status in real-time.",
+    no_args_is_help=False,
+)
+
+
+@git_app.callback(invoke_without_command=True)
+def git_main(
+    ctx: typer.Context,
+    project: Annotated[
+        Path | None,
+        typer.Option("--project", "-p", help="Git repository directory."),
+    ] = None,
+    interval: Annotated[
+        float,
+        typer.Option("--interval", "-i", help="Poll interval in seconds."),
+    ] = 2.0,
+    max_commits: Annotated[
+        int,
+        typer.Option("--max-commits", "-m", help="Maximum recent commits to show."),
+    ] = 10,
+    no_log: Annotated[
+        bool,
+        typer.Option("--no-log", help="Hide recent commits panel."),
+    ] = False,
+    no_diff: Annotated[
+        bool,
+        typer.Option("--no-diff", help="Hide diff stats panel."),
+    ] = False,
+    no_status: Annotated[
+        bool,
+        typer.Option("--no-status", help="Hide file status panel."),
+    ] = False,
+    preset: Annotated[
+        ConfigPreset | None,
+        typer.Option("--preset", help="Use preset configuration (minimal, verbose, debug)."),
+    ] = None,
+    version: Annotated[
+        bool | None,
+        typer.Option("--version", callback=version_callback, is_eager=True, help="Show version."),
+    ] = None,
+) -> None:
+    """Monitor git repository status with live updates.
+
+    Shows branch info, file statuses, recent commits, and diff statistics.
+    Updates in real-time by polling git status.
+
+    Examples:
+        cctmux-git                      # Monitor current directory
+        cctmux-git -p /path/to/repo     # Monitor specific repo
+        cctmux-git --no-log             # Hide recent commits
+        cctmux-git --no-diff            # Hide diff stats
+        cctmux-git -m 20               # Show 20 recent commits
+        cctmux-git --preset minimal     # Minimal display
+    """
+    if ctx.invoked_subcommand is not None:
+        return
+
+    # Load preset configuration if specified
+    if preset:
+        preset_config = get_preset_config(preset)
+        git_config = preset_config.git_monitor
+        effective_show_log = git_config.show_log
+        effective_show_diff = git_config.show_diff
+        effective_show_status = git_config.show_status
+        effective_max_commits = git_config.max_commits
+        effective_interval = git_config.poll_interval
+    else:
+        effective_show_log = not no_log
+        effective_show_diff = not no_diff
+        effective_show_status = not no_status
+        effective_max_commits = max_commits
+        effective_interval = interval
+
+    # CLI overrides preset
+    if max_commits != 10:
+        effective_max_commits = max_commits
+    if interval != 2.0:
+        effective_interval = interval
+
+    run_git_monitor(
+        repo_path=project,
+        poll_interval=effective_interval,
+        max_commits=effective_max_commits,
+        show_log=effective_show_log,
+        show_diff=effective_show_diff,
+        show_status=effective_show_status,
     )
 
 

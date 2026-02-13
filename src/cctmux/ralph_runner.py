@@ -253,7 +253,7 @@ def parse_claude_json_output(output: str) -> dict[str, Any]:
 
     try:
         raw = json.loads(output)
-    except json.JSONDecodeError, ValueError:
+    except (json.JSONDecodeError, ValueError):
         result["result_text"] = output[:500] if output else ""
         return result
 
@@ -331,7 +331,7 @@ def load_ralph_state(project_path: Path) -> RalphState | None:
     try:
         content = state_file.read_text(encoding="utf-8")
         return RalphState.model_validate_json(content)
-    except json.JSONDecodeError, ValueError:
+    except (json.JSONDecodeError, ValueError):
         return None
 
 

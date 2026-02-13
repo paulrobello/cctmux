@@ -37,7 +37,7 @@ def _get_nested_int(data: dict[str, Any], outer_key: str, inner_key: str) -> int
         outer = data.get(outer_key, {})
         if isinstance(outer, dict) and inner_key in outer:
             return int(f"{outer[inner_key]}")  # type: ignore[index]
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         pass
     return 0
 

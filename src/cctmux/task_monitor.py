@@ -151,7 +151,7 @@ def find_project_sessions(project_path: Path) -> list[SessionInfo]:
     try:
         data = json.loads(index_file.read_text(encoding="utf-8"))
         entries = data.get("entries", [])
-    except json.JSONDecodeError, OSError:
+    except (json.JSONDecodeError, OSError):
         return []
 
     # Convert to SessionInfo objects
@@ -185,7 +185,7 @@ def load_tasks_from_dir(tasks_dir: Path) -> list[Task]:
         try:
             data = json.loads(json_file.read_text(encoding="utf-8"))
             tasks.append(Task.from_json(data))
-        except json.JSONDecodeError, OSError:
+        except (json.JSONDecodeError, OSError):
             continue
 
     # Sort by ID (numeric first, then alphabetic)
@@ -309,7 +309,7 @@ def get_terminal_size() -> tuple[int, int]:
     try:
         size = shutil.get_terminal_size()
         return size.columns, size.lines
-    except AttributeError, ValueError:
+    except (AttributeError, ValueError):
         return 80, 24  # Fallback
 
 

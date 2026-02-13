@@ -135,7 +135,7 @@ def load_config(config_path: Path | None = None) -> Config:
         with path.open(encoding="utf-8") as f:
             data: dict[str, object] = yaml.safe_load(f) or {}
         return Config.model_validate(data)
-    except yaml.YAMLError, ValueError:
+    except (yaml.YAMLError, ValueError):
         return Config()
 
 

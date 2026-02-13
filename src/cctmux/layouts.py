@@ -34,7 +34,10 @@ def apply_layout(session_name: str, layout: LayoutType, dry_run: bool = False) -
         return apply_ralph_layout(session_name, dry_run)
     elif layout == LayoutType.RALPH_FULL:
         return apply_ralph_full_layout(session_name, dry_run)
-    return []
+    elif layout == LayoutType.GIT_MON:
+        return apply_git_mon_layout(session_name, dry_run)
+    else:
+        return []
 
 
 def apply_default_layout(session_name: str, dry_run: bool = False) -> list[str]:
@@ -594,6 +597,63 @@ def apply_ralph_full_layout(session_name: str, dry_run: bool = False) -> list[st
     commands.append(" ".join(tasks_cmd))
     if not dry_run:
         subprocess.run(tasks_cmd, check=True)
+
+    # Focus the left (main) pane
+    if dry_run:
+        focus_cmd = ["tmux", "select-pane", "-t", f"{session_name}:0.0"]
+    else:
+        focus_cmd = ["tmux", "select-pane", "-t", main_pane_id]
+    commands.append(" ".join(focus_cmd))
+    if not dry_run:
+        subprocess.run(focus_cmd, check=True)
+
+    return commands
+
+
+def apply_git_mon_layout(session_name: str, dry_run: bool = False) -> list[str]:
+    """Apply git-mon layout (Claude + git monitor).
+
+    Layout:
+    +-----------+----------+
+    |           | cctmux-  |
+    |  CLAUDE   | git      |
+    |  60%      |   40%    |
+    |           |          |
+    +-----------+----------+
+
+    Args:
+        session_name: The session name.
+        dry_run: If True, return commands without executing.
+
+    Returns:
+        List of commands that were (or would be) executed.
+    """
+    commands: list[str] = []
+
+    # Capture the main pane ID before any splits
+    main_pane_id = ""
+    if not dry_run:
+        get_pane_cmd = ["tmux", "display-message", "-p", "-t", session_name, "#{pane_id}"]
+        result = subprocess.run(get_pane_cmd, check=True, capture_output=True, text=True)
+        main_pane_id = result.stdout.strip()
+
+    # Split horizontally with 40% on the right
+    split_h_cmd = ["tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", session_name, "-h", "-p", "40"]
+    commands.append(" ".join(split_h_cmd))
+
+    right_pane_id = ""
+    if not dry_run:
+        result = subprocess.run(split_h_cmd, check=True, capture_output=True, text=True)
+        right_pane_id = result.stdout.strip()
+
+    # Launch cctmux-git in the right pane
+    if dry_run:
+        git_cmd = ["tmux", "send-keys", "-t", f"{session_name}:0.1", "cctmux-git", "Enter"]
+    else:
+        git_cmd = ["tmux", "send-keys", "-t", right_pane_id, "cctmux-git", "Enter"]
+    commands.append(" ".join(git_cmd))
+    if not dry_run:
+        subprocess.run(git_cmd, check=True)
 
     # Focus the left (main) pane
     if dry_run:

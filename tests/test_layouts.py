@@ -7,6 +7,7 @@ from cctmux.layouts import (
     apply_default_layout,
     apply_editor_layout,
     apply_full_monitor_layout,
+    apply_git_mon_layout,
     apply_layout,
     apply_monitor_layout,
     apply_ralph_full_layout,
@@ -78,6 +79,12 @@ class TestApplyLayout:
         assert len(commands) == 5
         assert "cctmux-ralph" in commands[1]
         assert "cctmux-tasks" in commands[3]
+
+    def test_git_mon_layout_dispatch(self) -> None:
+        """Should dispatch to git-mon layout handler."""
+        commands = apply_layout("test-session", LayoutType.GIT_MON, dry_run=True)
+        assert len(commands) == 3
+        assert "cctmux-git" in commands[1]
 
 
 class TestApplyDefaultLayout:
@@ -236,3 +243,20 @@ class TestApplyRalphFullLayout:
         assert "cctmux-tasks -g" in commands[3]
         # 5: focus main (left) pane
         assert commands[4] == "tmux select-pane -t test-session:0.0"
+
+
+class TestApplyGitMonLayout:
+    """Tests for apply_git_mon_layout function."""
+
+    def test_dry_run_returns_commands(self) -> None:
+        """Should return correct commands in dry run."""
+        commands = apply_git_mon_layout("test-session", dry_run=True)
+        assert len(commands) == 3
+        # 1: horizontal split with 40% right
+        assert "-h -p 40" in commands[0]
+        assert "-P" in commands[0]
+        # 2: cctmux-git in right pane
+        assert "cctmux-git" in commands[1]
+        assert "send-keys" in commands[1]
+        # 3: focus main (left) pane
+        assert commands[2] == "tmux select-pane -t test-session:0.0"

@@ -15,6 +15,7 @@ from cctmux.config import (
     load_config,
     save_config,
 )
+from cctmux.git_monitor import run_git_monitor
 from cctmux.session_history import (
     add_or_update_entry,
     get_entry_by_name,
@@ -33,7 +34,6 @@ from cctmux.subagent_monitor import (
     list_subagents,
     run_subagent_monitor,
 )
-from cctmux.git_monitor import run_git_monitor
 from cctmux.task_monitor import list_sessions, run_monitor
 from cctmux.tmux_manager import attach_session, create_session, is_inside_tmux, session_exists
 from cctmux.utils import get_project_name, is_fzf_available, sanitize_session_name, select_with_fzf

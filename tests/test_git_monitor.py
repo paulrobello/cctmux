@@ -333,17 +333,13 @@ class TestRunGitCommand:
 
     def test_successful_command(self, tmp_path: Path) -> None:
         with patch("cctmux.git_monitor.subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0, stdout="output\n", stderr=""
-            )
+            mock_run.return_value = MagicMock(returncode=0, stdout="output\n", stderr="")
             result = _run_git_command(["status"], tmp_path)
             assert result == "output\n"
 
     def test_failed_command_returns_empty(self, tmp_path: Path) -> None:
         with patch("cctmux.git_monitor.subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=128, stdout="", stderr="fatal: not a git repo"
-            )
+            mock_run.return_value = MagicMock(returncode=128, stdout="", stderr="fatal: not a git repo")
             result = _run_git_command(["status"], tmp_path)
             assert result == ""
 
@@ -365,12 +361,7 @@ class TestCollectGitStatus:
 
     def test_collects_all_data(self, tmp_path: Path) -> None:
         """Should call all git commands and assemble GitStatus."""
-        porcelain = (
-            "# branch.oid abc123\n"
-            "# branch.head main\n"
-            "# branch.upstream origin/main\n"
-            "# branch.ab +0 -0\n"
-        )
+        porcelain = "# branch.oid abc123\n# branch.head main\n# branch.upstream origin/main\n# branch.ab +0 -0\n"
         log_line = "abc1234|5 min ago|init|Author\n"
 
         def mock_run(args: list[str], **kwargs: object) -> MagicMock:
@@ -490,7 +481,5 @@ class TestBuildDisplay:
 
     def test_respects_show_flags(self) -> None:
         status = _make_status()
-        display = build_display(
-            status, show_log=False, show_diff=False, show_status=False
-        )
+        display = build_display(status, show_log=False, show_diff=False, show_status=False)
         assert isinstance(display, Group)

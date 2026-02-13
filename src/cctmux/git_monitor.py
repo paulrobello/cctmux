@@ -329,14 +329,10 @@ def collect_git_status(repo_path: Path, max_commits: int = 10) -> GitStatus:
 
     # Stash count
     stash_output = _run_git_command(["stash", "list"], repo_path)
-    status.stash_count = len(
-        [line for line in stash_output.strip().splitlines() if line]
-    )
+    status.stash_count = len([line for line in stash_output.strip().splitlines() if line])
 
     # Last commit info
-    last_commit = _run_git_command(
-        ["log", "-1", "--format=%h|%cr|%s|%an"], repo_path
-    )
+    last_commit = _run_git_command(["log", "-1", "--format=%h|%cr|%s|%an"], repo_path)
     if last_commit.strip():
         parts = last_commit.strip().split("|", 3)
         if len(parts) == 4:
@@ -346,9 +342,7 @@ def collect_git_status(repo_path: Path, max_commits: int = 10) -> GitStatus:
             status.last_commit_author = parts[3]
 
     # Recent commits
-    log_output = _run_git_command(
-        ["log", f"--format=%h|%cr|%s|%an", f"-{max_commits}"], repo_path
-    )
+    log_output = _run_git_command(["log", "--format=%h|%cr|%s|%an", f"-{max_commits}"], repo_path)
     status.commits = parse_log_output(log_output)
 
     # Diff stats

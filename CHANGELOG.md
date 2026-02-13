@@ -1,0 +1,43 @@
+# Changelog
+
+All notable changes to cctmux will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+
+## [Unreleased]
+
+### Added
+
+- **Git Monitor** (`cctmux-git`): Real-time git repository status monitor with branch info, file status, recent commits, and diff statistics
+- **Git-Mon Layout**: New `git-mon` layout providing Claude (60%) + git status monitor (40%) side-by-side
+- **Git Monitor Configuration**: `git_monitor` section in config with `show_log`, `show_diff`, `show_status`, `max_commits`, and `poll_interval` settings
+- **Git Monitor Presets**: Minimal, verbose, and debug presets for `cctmux-git`
+
+### Fixed
+
+- Resolved pyright strict mode issues in git_monitor dataclass fields
+
+## [0.1.0] - 2026-02-06
+
+### Added
+
+- **Session Management**: Create and attach to tmux sessions named after project folders
+- **Predefined Layouts**: 9 layouts (default, editor, monitor, triple, cc-mon, full-monitor, dashboard, ralph, ralph-full)
+- **Task Monitor** (`cctmux-tasks`): Real-time task monitoring with ASCII dependency graphs and virtual scrolling
+- **Session Monitor** (`cctmux-session`): Live session event monitoring with tool calls, thinking blocks, token usage, and cost estimates
+- **Subagent Monitor** (`cctmux-agents`): Track subagent activity across parallel tasks
+- **Activity Dashboard** (`cctmux-activity`): Usage statistics with heatmaps, model usage tables, and hourly distribution
+- **Ralph Loop** (`cctmux-ralph`): Automated iterative Claude Code execution with task tracking and completion detection
+- **Ralph Monitor**: Live dashboard for Ralph Loop progress, iterations, and cost tracking
+- **Claude Skill**: cc-tmux skill for Claude to manage tmux panes with pane ID targeting
+- **Configuration System**: YAML-based config with presets (default, minimal, verbose, debug)
+- **Session History**: Track recent sessions with fzf integration for quick switching
+- **Status Bar**: Optional tmux status bar showing git branch and project info
+- **Dry Run Mode**: Preview tmux commands without executing
+- **Environment Variables**: `CCTMUX_SESSION`, `CCTMUX_PROJECT_DIR`, optional `CLAUDE_CODE_TASK_LIST_ID`
+- **Path Compression**: Replace home directory with `~` in display output
+- **XDG Compliance**: Config and data stored in XDG-compliant locations
+
+### Fixed
+
+- Downgraded Python requirement from 3.14 to 3.13 for broader compatibility

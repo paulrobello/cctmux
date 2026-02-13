@@ -13,7 +13,7 @@ Comprehensive documentation for cctmux, a CLI tool that launches Claude Code ins
 cctmux provides a seamless integration between Claude Code and tmux, enabling:
 
 - **Session Management**: Create and attach to named tmux sessions per project
-- **Layout Presets**: Predefined pane arrangements for different workflows (default, editor, monitor, triple, cc-mon, full-monitor, dashboard, ralph, ralph-full)
+- **Layout Presets**: Predefined pane arrangements for different workflows (default, editor, monitor, triple, cc-mon, full-monitor, dashboard, ralph, ralph-full, git-mon)
 - **Real-time Monitoring**: Track tasks, session events, subagents, and usage statistics
 - **Configuration**: YAML-based settings with CLI overrides and presets
 - **Ralph Loop Automation**: Automated iterative Claude Code execution with task tracking, cost monitoring, and completion detection
@@ -26,6 +26,7 @@ graph TB
         Session[cctmux-session]
         Agents[cctmux-agents]
         Activity[cctmux-activity]
+        GitMon[cctmux-git]
         Ralph[cctmux-ralph]
     end
 
@@ -43,6 +44,10 @@ graph TB
         RalphState[Ralph State JSON]
     end
 
+    subgraph "External"
+        GitRepo[Git Repository]
+    end
+
     Main --> TmuxSession
     TmuxSession --> Panes
     TmuxSession --> StatusBar
@@ -52,6 +57,7 @@ graph TB
     Session --> SessionFiles
     Agents --> SessionFiles
     Activity --> StatsCache
+    GitMon --> GitRepo
     Ralph --> RalphState
     Ralph --> Claude
 
@@ -60,6 +66,7 @@ graph TB
     style Session fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style Agents fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
     style Activity fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
+    style GitMon fill:#004d40,stroke:#00897b,stroke-width:2px,color:#ffffff
     style Ralph fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
     style TmuxSession fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style Panes fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
@@ -69,6 +76,7 @@ graph TB
     style SessionFiles fill:#1a237e,stroke:#3f51b5,stroke-width:2px,color:#ffffff
     style StatsCache fill:#1a237e,stroke:#3f51b5,stroke-width:2px,color:#ffffff
     style RalphState fill:#1a237e,stroke:#3f51b5,stroke-width:2px,color:#ffffff
+    style GitRepo fill:#004d40,stroke:#00897b,stroke-width:2px,color:#ffffff
 ```
 
 ## Documentation Index
@@ -96,6 +104,7 @@ graph TB
 | `cctmux-session` | Monitor Claude Code session stream in real-time |
 | `cctmux-agents` | Monitor subagent activity in real-time |
 | `cctmux-activity` | Display usage statistics dashboard |
+| `cctmux-git` | Monitor git repository status in real-time |
 | `cctmux-ralph` | Monitor a running Ralph Loop dashboard |
 | `cctmux-ralph start` | Start a Ralph Loop from a project file |
 | `cctmux-ralph init` | Create a template Ralph project file |
@@ -128,6 +137,12 @@ cctmux-agents
 
 # Check usage statistics
 cctmux-activity
+
+# Monitor git repository status
+cctmux-git
+
+# Start with git monitor layout
+cctmux -l git-mon
 
 # Create a Ralph project template
 cctmux-ralph init

@@ -4,8 +4,6 @@ Provides dataclasses and parsers for git status, diff stats, and log output.
 No display or subprocess code - only data models and pure parsing functions.
 """
 
-from __future__ import annotations
-
 import re
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -62,11 +60,11 @@ class GitStatus:
     upstream: str = ""
     ahead: int = 0
     behind: int = 0
-    files: list[FileChange] = field(default_factory=lambda: list[FileChange]())
+    files: list[FileChange] = field(default_factory=list[FileChange])
     stash_count: int = 0
-    commits: list[CommitInfo] = field(default_factory=lambda: list[CommitInfo]())
-    staged_diff: list[DiffStat] = field(default_factory=lambda: list[DiffStat]())
-    unstaged_diff: list[DiffStat] = field(default_factory=lambda: list[DiffStat]())
+    commits: list[CommitInfo] = field(default_factory=list[CommitInfo])
+    staged_diff: list[DiffStat] = field(default_factory=list[DiffStat])
+    unstaged_diff: list[DiffStat] = field(default_factory=list[DiffStat])
     last_commit_hash: str = ""
     last_commit_message: str = ""
     last_commit_author: str = ""

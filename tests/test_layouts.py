@@ -2,10 +2,13 @@
 
 import pytest
 
-from cctmux.config import LayoutType
+from cctmux.config import CustomLayout, LayoutType, PaneSplit, SplitDirection
 from cctmux.layouts import (
+    BUILTIN_TEMPLATES,
+    LAYOUT_DESCRIPTIONS,
     _validate_pane_id,
     apply_cc_mon_layout,
+    apply_custom_layout,
     apply_dashboard_layout,
     apply_default_layout,
     apply_editor_layout,
@@ -88,6 +91,29 @@ class TestApplyLayout:
         commands = apply_layout("test-session", LayoutType.GIT_MON, dry_run=True)
         assert len(commands) == 3
         assert "cctmux-git" in commands[1]
+
+    def test_string_layout_dispatch(self) -> None:
+        """Should accept string layout names for built-in layouts."""
+        commands = apply_layout("test-session", "editor", dry_run=True)
+        assert len(commands) == 1
+        assert "split-window" in commands[0]
+
+    def test_custom_layout_dispatch(self) -> None:
+        """Should dispatch to custom layout by name."""
+        custom = CustomLayout(
+            name="my-layout",
+            splits=[
+                PaneSplit(direction=SplitDirection.HORIZONTAL, size=40),
+            ],
+        )
+        commands = apply_layout("test-session", "my-layout", dry_run=True, custom_layouts=[custom])
+        assert len(commands) >= 1
+        assert "split-window" in commands[0]
+
+    def test_unknown_layout_returns_empty(self) -> None:
+        """Should return empty list for unknown layout name."""
+        commands = apply_layout("test-session", "nonexistent", dry_run=True)
+        assert commands == []
 
 
 class TestApplyDefaultLayout:
@@ -293,3 +319,142 @@ class TestValidatePaneId:
         """Should include context label in error message."""
         with pytest.raises(ValueError, match="main_pane"):
             _validate_pane_id("", context="main_pane")
+
+
+class TestApplyCustomLayout:
+    """Tests for apply_custom_layout function."""
+
+    def test_single_horizontal_split(self) -> None:
+        """Should create a single horizontal split."""
+        layout = CustomLayout(
+            name="simple",
+            splits=[
+                PaneSplit(direction=SplitDirection.HORIZONTAL, size=40),
+            ],
+        )
+        commands = apply_custom_layout("test-session", layout, dry_run=True)
+        # 1: split, 2: focus main
+        assert len(commands) == 2
+        assert "split-window" in commands[0]
+        assert "-h" in commands[0]
+        assert "-p 40" in commands[0]
+        assert "select-pane" in commands[1]
+
+    def test_split_with_command(self) -> None:
+        """Should send command to new pane."""
+        layout = CustomLayout(
+            name="with-cmd",
+            splits=[
+                PaneSplit(direction=SplitDirection.HORIZONTAL, size=40, command="htop"),
+            ],
+        )
+        commands = apply_custom_layout("test-session", layout, dry_run=True)
+        # 1: split, 2: send-keys htop, 3: focus main
+        assert len(commands) == 3
+        assert "htop" in commands[1]
+        assert "send-keys" in commands[1]
+
+    def test_named_pane_targeting(self) -> None:
+        """Should split named panes correctly."""
+        layout = CustomLayout(
+            name="named",
+            splits=[
+                PaneSplit(direction=SplitDirection.HORIZONTAL, size=50, name="right"),
+                PaneSplit(direction=SplitDirection.VERTICAL, size=50, target="right"),
+            ],
+        )
+        commands = apply_custom_layout("test-session", layout, dry_run=True)
+        # 1: split h, 2: split v, 3: focus main
+        assert len(commands) == 3
+        assert "-h" in commands[0]
+        assert "-v" in commands[1]
+
+    def test_focus_specific_pane(self) -> None:
+        """Should focus the pane with focus=True."""
+        layout = CustomLayout(
+            name="focused",
+            splits=[
+                PaneSplit(direction=SplitDirection.HORIZONTAL, size=40, focus=True),
+            ],
+            focus_main=True,
+        )
+        commands = apply_custom_layout("test-session", layout, dry_run=True)
+        # Last command should focus the split pane (index 1), not main (0)
+        assert "select-pane" in commands[-1]
+        assert "0.1" in commands[-1]
+
+    def test_no_splits_no_focus(self) -> None:
+        """Should handle empty layout (no splits, no focus command if focus_main=False)."""
+        layout = CustomLayout(name="empty", focus_main=False)
+        commands = apply_custom_layout("test-session", layout, dry_run=True)
+        assert commands == []
+
+    def test_empty_splits_with_focus_main(self) -> None:
+        """Should focus main even with no splits if focus_main=True."""
+        layout = CustomLayout(name="empty-focus", focus_main=True)
+        commands = apply_custom_layout("test-session", layout, dry_run=True)
+        assert len(commands) == 1
+        assert "select-pane" in commands[0]
+
+    def test_multi_split_cc_mon_equivalent(self) -> None:
+        """Should produce similar commands to cc-mon layout."""
+        layout = CustomLayout(
+            name="my-cc-mon",
+            splits=[
+                PaneSplit(direction=SplitDirection.HORIZONTAL, size=50, command="cctmux-session", name="session"),
+                PaneSplit(
+                    direction=SplitDirection.VERTICAL,
+                    size=50,
+                    command="cctmux-tasks -g",
+                    target="session",
+                    name="tasks",
+                ),
+            ],
+        )
+        commands = apply_custom_layout("test-session", layout, dry_run=True)
+        # split + send-keys + split + send-keys + focus = 5
+        assert len(commands) == 5
+        assert "cctmux-session" in commands[1]
+        assert "cctmux-tasks -g" in commands[3]
+        assert "select-pane" in commands[4]
+
+
+class TestBuiltinTemplates:
+    """Tests for BUILTIN_TEMPLATES dict."""
+
+    def test_all_non_default_layouts_have_templates(self) -> None:
+        """All non-default layouts with splits should have templates."""
+        for lt in LayoutType:
+            if lt == LayoutType.DEFAULT:
+                continue
+            assert lt in BUILTIN_TEMPLATES, f"Missing template for {lt.value}"
+
+    def test_template_splits_are_panesplit(self) -> None:
+        """All template entries should be PaneSplit objects."""
+        for lt, splits in BUILTIN_TEMPLATES.items():
+            for split in splits:
+                assert isinstance(split, PaneSplit), f"Invalid split in {lt.value}: {split}"
+
+    def test_editor_template(self) -> None:
+        """Editor template should have one horizontal split."""
+        splits = BUILTIN_TEMPLATES[LayoutType.EDITOR]
+        assert len(splits) == 1
+        assert splits[0].direction == SplitDirection.HORIZONTAL
+        assert splits[0].size == 30
+
+    def test_cc_mon_template(self) -> None:
+        """CC-mon template should have two splits with commands."""
+        splits = BUILTIN_TEMPLATES[LayoutType.CC_MON]
+        assert len(splits) == 2
+        assert splits[0].command == "cctmux-session"
+        assert splits[1].command == "cctmux-tasks -g"
+
+
+class TestLayoutDescriptions:
+    """Tests for LAYOUT_DESCRIPTIONS dict."""
+
+    def test_all_layouts_have_descriptions(self) -> None:
+        """All layout types should have descriptions."""
+        for lt in LayoutType:
+            assert lt in LAYOUT_DESCRIPTIONS, f"Missing description for {lt.value}"
+            assert LAYOUT_DESCRIPTIONS[lt], f"Empty description for {lt.value}"

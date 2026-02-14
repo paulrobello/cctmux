@@ -3,7 +3,7 @@
 import subprocess
 from collections.abc import Callable
 
-from cctmux.config import LayoutType
+from cctmux.config import CustomLayout, LayoutType, PaneSplit, SplitDirection
 
 # Type alias for layout handler functions
 LayoutHandler = Callable[[str, bool], list[str]]
@@ -685,6 +685,182 @@ def apply_git_mon_layout(session_name: str, dry_run: bool = False) -> list[str]:
     return commands
 
 
+def apply_custom_layout(session_name: str, layout: CustomLayout, dry_run: bool = False) -> list[str]:
+    """Apply a custom layout to a tmux session.
+
+    Args:
+        session_name: The session name.
+        layout: The custom layout definition.
+        dry_run: If True, return commands without executing.
+
+    Returns:
+        List of commands that were (or would be) executed.
+    """
+    commands: list[str] = []
+
+    # Capture the main pane ID before any splits
+    main_pane_id = ""
+    if not dry_run:
+        get_pane_cmd = ["tmux", "display-message", "-p", "-t", session_name, "#{pane_id}"]
+        result = _run_tmux(get_pane_cmd, capture_output=True, text=True)
+        main_pane_id = result.stdout.strip()
+        _validate_pane_id(main_pane_id, "main pane")
+
+    # Track pane IDs by name
+    pane_registry: dict[str, str] = {
+        "main": main_pane_id,
+    }
+    last_pane_id = main_pane_id
+    focus_pane_id = ""
+
+    for split_idx, split in enumerate(layout.splits):
+        # dry_run_index is 1-based (pane 0 is main, splits start at 1)
+        dry_run_index = split_idx + 1
+        # Resolve target pane ID
+        target_name = split.target
+        if dry_run:
+            if target_name == "main":
+                target_ref = f"{session_name}:0.0"
+            elif target_name == "last":
+                target_ref = f"{session_name}:0.{split_idx}" if split_idx > 0 else f"{session_name}:0.0"
+            else:
+                # Named pane — use positional index in dry-run
+                target_ref = f"{session_name}:0.0"
+        else:
+            if target_name in pane_registry:
+                target_ref = pane_registry[target_name]
+            elif target_name == "last":
+                target_ref = last_pane_id
+            else:
+                # Unknown target, fall back to main
+                target_ref = pane_registry.get("main", main_pane_id)
+
+        direction_flag = f"-{split.direction.value}"
+
+        # Build split command
+        split_cmd = [
+            "tmux",
+            "split-window",
+            "-d",
+            "-P",
+            "-F",
+            "#{pane_id}",
+            "-t",
+            target_ref,
+            direction_flag,
+            "-p",
+            str(split.size),
+        ]
+        commands.append(" ".join(split_cmd))
+
+        new_pane_id = ""
+        if not dry_run:
+            result = _run_tmux(split_cmd, capture_output=True, text=True)
+            new_pane_id = result.stdout.strip()
+            _validate_pane_id(new_pane_id, split.name or "split pane")
+
+        # Register the new pane
+        last_pane_id = new_pane_id
+        pane_registry["last"] = new_pane_id
+        if split.name:
+            pane_registry[split.name] = new_pane_id
+
+        # Send command if specified
+        if split.command:
+            if dry_run:
+                send_cmd = ["tmux", "send-keys", "-t", f"{session_name}:0.{dry_run_index}", split.command, "Enter"]
+            else:
+                send_cmd = ["tmux", "send-keys", "-t", new_pane_id, split.command, "Enter"]
+            commands.append(" ".join(send_cmd))
+            if not dry_run:
+                _run_tmux(send_cmd)
+
+        # Track which pane to focus
+        if split.focus:
+            focus_pane_id = f"{session_name}:0.{dry_run_index}" if dry_run else new_pane_id
+
+    # Focus the appropriate pane
+    if focus_pane_id:
+        target = focus_pane_id
+    elif layout.focus_main:
+        target = f"{session_name}:0.0" if dry_run else main_pane_id
+    else:
+        target = ""
+
+    if target:
+        focus_cmd = ["tmux", "select-pane", "-t", target]
+        commands.append(" ".join(focus_cmd))
+        if not dry_run:
+            _run_tmux(focus_cmd)
+
+    return commands
+
+
+# Built-in layout templates for --from support in layout add
+BUILTIN_TEMPLATES: dict[LayoutType, list[PaneSplit]] = {
+    LayoutType.EDITOR: [
+        PaneSplit(direction=SplitDirection.HORIZONTAL, size=30),
+    ],
+    LayoutType.MONITOR: [
+        PaneSplit(direction=SplitDirection.VERTICAL, size=20),
+    ],
+    LayoutType.TRIPLE: [
+        PaneSplit(direction=SplitDirection.HORIZONTAL, size=50, name="right"),
+        PaneSplit(direction=SplitDirection.VERTICAL, size=50, target="right"),
+    ],
+    LayoutType.CC_MON: [
+        PaneSplit(direction=SplitDirection.HORIZONTAL, size=50, command="cctmux-session", name="session"),
+        PaneSplit(
+            direction=SplitDirection.VERTICAL, size=50, command="cctmux-tasks -g", target="session", name="tasks"
+        ),
+    ],
+    LayoutType.FULL_MONITOR: [
+        PaneSplit(direction=SplitDirection.HORIZONTAL, size=40, command="cctmux-session", name="session"),
+        PaneSplit(
+            direction=SplitDirection.VERTICAL, size=70, command="cctmux-tasks -g", target="session", name="tasks"
+        ),
+        PaneSplit(
+            direction=SplitDirection.VERTICAL, size=50, command="cctmux-activity", target="tasks", name="activity"
+        ),
+    ],
+    LayoutType.DASHBOARD: [
+        PaneSplit(direction=SplitDirection.HORIZONTAL, size=30, command="cctmux-session", name="session"),
+        PaneSplit(direction=SplitDirection.VERTICAL, size=50, target="session"),
+        PaneSplit(
+            direction=SplitDirection.HORIZONTAL,
+            size=0,
+            command="cctmux-activity --show-hourly",
+            target="main",
+            name="activity",
+        ),
+    ],
+    LayoutType.RALPH: [
+        PaneSplit(direction=SplitDirection.HORIZONTAL, size=40, command="cctmux-ralph", name="ralph"),
+    ],
+    LayoutType.RALPH_FULL: [
+        PaneSplit(direction=SplitDirection.HORIZONTAL, size=40, command="cctmux-ralph", name="ralph"),
+        PaneSplit(direction=SplitDirection.VERTICAL, size=50, command="cctmux-tasks -g", target="ralph", name="tasks"),
+    ],
+    LayoutType.GIT_MON: [
+        PaneSplit(direction=SplitDirection.HORIZONTAL, size=40, command="cctmux-git", name="git"),
+    ],
+}
+
+# Layout descriptions for list command
+LAYOUT_DESCRIPTIONS: dict[LayoutType, str] = {
+    LayoutType.DEFAULT: "No initial split, panes created on demand",
+    LayoutType.EDITOR: "70/30 horizontal split",
+    LayoutType.MONITOR: "Main + bottom bar (80/20)",
+    LayoutType.TRIPLE: "Main + 2 side panes (50/50)",
+    LayoutType.CC_MON: "Claude + session monitor + task monitor",
+    LayoutType.FULL_MONITOR: "Main + session + task + activity monitors",
+    LayoutType.DASHBOARD: "Large activity dashboard with session stats",
+    LayoutType.RALPH: "Shell + ralph monitor side-by-side",
+    LayoutType.RALPH_FULL: "Shell + ralph monitor + task monitor",
+    LayoutType.GIT_MON: "Claude + git monitor",
+}
+
+
 # Dictionary dispatch for layout handlers
 _LAYOUT_HANDLERS: dict[LayoutType, LayoutHandler] = {
     LayoutType.DEFAULT: apply_default_layout,
@@ -700,18 +876,44 @@ _LAYOUT_HANDLERS: dict[LayoutType, LayoutHandler] = {
 }
 
 
-def apply_layout(session_name: str, layout: LayoutType, dry_run: bool = False) -> list[str]:
+def apply_layout(
+    session_name: str,
+    layout: LayoutType | str,
+    dry_run: bool = False,
+    custom_layouts: list[CustomLayout] | None = None,
+) -> list[str]:
     """Apply a layout to a tmux session.
 
     Args:
         session_name: The session name.
-        layout: The layout type to apply.
+        layout: The layout type (built-in) or custom layout name (string).
         dry_run: If True, return commands without executing.
+        custom_layouts: Optional list of custom layouts to search.
 
     Returns:
         List of commands that were (or would be) executed.
     """
-    handler = _LAYOUT_HANDLERS.get(layout)
-    if handler is None:
-        return []
-    return handler(session_name, dry_run)
+    # Try as built-in layout
+    if isinstance(layout, LayoutType):
+        handler = _LAYOUT_HANDLERS.get(layout)
+        if handler is None:
+            return []
+        return handler(session_name, dry_run)
+
+    # Try built-in by string value
+    try:
+        builtin = LayoutType(layout)
+        handler = _LAYOUT_HANDLERS.get(builtin)
+        if handler is None:
+            return []
+        return handler(session_name, dry_run)
+    except ValueError:
+        pass
+
+    # Look up custom layout by name
+    if custom_layouts:
+        for custom in custom_layouts:
+            if custom.name == layout:
+                return apply_custom_layout(session_name, custom, dry_run)
+
+    return []

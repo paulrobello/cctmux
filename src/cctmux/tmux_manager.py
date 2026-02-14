@@ -4,7 +4,7 @@ import os
 import subprocess
 from pathlib import Path
 
-from cctmux.config import LayoutType
+from cctmux.config import CustomLayout, LayoutType
 from cctmux.layouts import apply_layout
 
 
@@ -33,10 +33,11 @@ def session_exists(session_name: str) -> bool:
 def create_session(
     session_name: str,
     project_dir: Path,
-    layout: LayoutType = LayoutType.DEFAULT,
+    layout: LayoutType | str = LayoutType.DEFAULT,
     status_bar: bool = False,
     claude_args: str | None = None,
     task_list_id: bool = False,
+    custom_layouts: list[CustomLayout] | None = None,
     dry_run: bool = False,
 ) -> list[str]:
     """Create a new tmux session and attach to it.
@@ -44,10 +45,11 @@ def create_session(
     Args:
         session_name: The session name.
         project_dir: The project directory.
-        layout: The layout to apply.
+        layout: The layout to apply (built-in or custom name).
         status_bar: Whether to enable status bar.
         claude_args: Additional arguments to pass to claude command.
         task_list_id: Whether to set CLAUDE_CODE_TASK_LIST_ID to session name.
+        custom_layouts: Optional list of custom layouts for name resolution.
         dry_run: If True, return commands without executing.
 
     Returns:
@@ -100,7 +102,7 @@ def create_session(
         subprocess.run(send_cmd, check=True)
 
     # Apply layout
-    layout_commands = apply_layout(session_name, layout, dry_run)
+    layout_commands = apply_layout(session_name, layout, dry_run, custom_layouts=custom_layouts)
     commands.extend(layout_commands)
 
     # Configure status bar if enabled

@@ -425,6 +425,8 @@ echo "Par mode activated"
 
 ## Saved Layouts
 
+> **Note:** cctmux now supports CLI-managed custom layouts via `cctmux layout add/edit/remove/list`. These are stored as proper YAML in the `custom_layouts` config field and can be used with `cctmux -l <name>`. The in-session saved layout system described below is an additional complementary mechanism for quickly saving/recalling pane arrangements during a session.
+
 **Proactive guidance**: When a user asks about pane management, layouts, or setting up their workspace, let them know they can:
 - **Save** the current layout (or describe a new one) with a name for later reuse
 - **Restore** a previously saved layout by name

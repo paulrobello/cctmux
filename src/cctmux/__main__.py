@@ -10,10 +10,13 @@ from cctmux import __version__
 from cctmux.config import (
     Config,
     ConfigPreset,
+    CustomLayout,
     LayoutType,
+    display_config_warnings,
     get_preset_config,
     load_config,
     save_config,
+    validate_layout_name,
 )
 from cctmux.git_monitor import run_git_monitor
 from cctmux.session_history import (
@@ -81,9 +84,9 @@ def install_skill() -> None:
 def main(
     ctx: typer.Context,
     layout: Annotated[
-        LayoutType,
-        typer.Option("--layout", "-l", help="Tmux layout to use."),
-    ] = LayoutType.DEFAULT,
+        str,
+        typer.Option("--layout", "-l", help="Tmux layout to use (built-in or custom name)."),
+    ] = "default",
     recent: Annotated[
         bool,
         typer.Option("--recent", "-R", help="Select from recent sessions using fzf."),
@@ -134,6 +137,10 @@ def main(
         bool,
         typer.Option("--task-list-id", "-T", help="Set CLAUDE_CODE_TASK_LIST_ID to session name."),
     ] = False,
+    strict: Annotated[
+        bool,
+        typer.Option("--strict", help="Exit with error on config validation warnings."),
+    ] = False,
     version: Annotated[
         bool | None,
         typer.Option("--version", callback=version_callback, is_eager=True, help="Show version."),
@@ -148,7 +155,13 @@ def main(
     ensure_directories()
 
     # Load configuration (use cwd for project-level config discovery)
-    config = load_config(config_path, project_dir=Path.cwd())
+    config, config_warnings = load_config(config_path, project_dir=Path.cwd(), strict=strict)
+
+    # Handle config warnings
+    if config_warnings:
+        display_config_warnings(config_warnings, err_console)
+        if strict:
+            raise typer.Exit(1)
 
     # Handle dump-config
     if dump_config:
@@ -160,7 +173,11 @@ def main(
         raise typer.Exit()
 
     # Merge CLI args with config (CLI takes precedence)
-    effective_layout = layout if layout != LayoutType.DEFAULT else config.default_layout
+    # layout is now a string; "default" is the CLI default meaning "use config"
+    if layout != "default":
+        effective_layout: LayoutType | str = layout
+    else:
+        effective_layout = config.default_layout
     effective_status_bar = status_bar or config.status_bar_enabled
     effective_claude_args = claude_args if claude_args else config.default_claude_args
     if yolo:
@@ -188,7 +205,8 @@ def main(
 
     if debug or verbose > 1:
         console.print(f"[dim]Config file: {get_config_file_path()}[/]")
-        console.print(f"[dim]Layout: {effective_layout.value}[/]")
+        layout_display = effective_layout.value if isinstance(effective_layout, LayoutType) else effective_layout
+        console.print(f"[dim]Layout: {layout_display}[/]")
         console.print(f"[dim]Status bar: {effective_status_bar}[/]")
         if effective_claude_args:
             console.print(f"[dim]Claude args: {effective_claude_args}[/]")
@@ -255,6 +273,17 @@ def main(
         if verbose > 0 or dry_run:
             console.print(f"[green]Creating new session:[/] {session_name}")
 
+        # Validate layout name against built-in and custom layouts
+        try:
+            LayoutType(effective_layout)
+        except ValueError:
+            # Not a built-in layout — check custom layouts
+            custom_match = [cl for cl in config.custom_layouts if cl.name == effective_layout]
+            if not custom_match:
+                err_console.print(f"[red]Error:[/] Unknown layout: {effective_layout}")
+                err_console.print("[dim]Use 'cctmux layout list' to see available layouts.[/]")
+                raise typer.Exit(1) from None
+
         commands = create_session(
             session_name=session_name,
             project_dir=project_dir,
@@ -262,6 +291,7 @@ def main(
             status_bar=effective_status_bar,
             claude_args=effective_claude_args,
             task_list_id=effective_task_list_id,
+            custom_layouts=config.custom_layouts,
             dry_run=dry_run,
         )
 
@@ -649,7 +679,7 @@ def agents_main(
         return
 
     # Resolve inactive timeout: CLI flag > config > default (300s)
-    config = load_config(project_dir=project or Path.cwd())
+    config, _agent_warnings = load_config(project_dir=project or Path.cwd())
     effective_timeout = inactive_timeout if inactive_timeout is not None else config.agent_monitor.inactive_timeout
 
     if do_list:
@@ -840,7 +870,7 @@ def git_main(
         effective_max_commits = max_commits
         effective_interval = interval
         # Use config defaults when no preset
-        config = load_config(project_dir=project or Path.cwd())
+        config, _git_warnings = load_config(project_dir=project or Path.cwd())
         effective_fetch_enabled = config.git_monitor.fetch_enabled
         effective_fetch_interval = config.git_monitor.fetch_interval
 
@@ -1059,6 +1089,338 @@ def ralph_status(
 
     if state.completion_promise:
         console.print(f'Promise: "{state.completion_promise}"')
+
+
+config_app = typer.Typer(
+    name="config",
+    help="Configuration management commands.",
+)
+app.add_typer(config_app, name="config")
+
+
+@config_app.command("validate")
+def config_validate(
+    config_path: Annotated[
+        Path | None,
+        typer.Option("--config", "-C", help="Config file path."),
+    ] = None,
+    project: Annotated[
+        Path | None,
+        typer.Option("--project", "-p", help="Project directory."),
+    ] = None,
+) -> None:
+    """Validate all config files and report warnings."""
+    project_dir = project or Path.cwd()
+    _config, warnings = load_config(config_path, project_dir=project_dir, strict=True)
+
+    if warnings:
+        display_config_warnings(warnings, err_console)
+        raise typer.Exit(1)
+
+    console.print("[green]✓[/] All config files are valid.")
+
+
+@config_app.command("show")
+def config_show(
+    config_path: Annotated[
+        Path | None,
+        typer.Option("--config", "-C", help="Config file path."),
+    ] = None,
+    project: Annotated[
+        Path | None,
+        typer.Option("--project", "-p", help="Project directory."),
+    ] = None,
+) -> None:
+    """Show effective merged configuration."""
+    import yaml
+
+    project_dir = project or Path.cwd()
+    config, warnings = load_config(config_path, project_dir=project_dir)
+
+    if warnings:
+        display_config_warnings(warnings, err_console)
+
+    data = config.model_dump()
+    data["default_layout"] = config.default_layout.value
+    console.print(yaml.dump(data, default_flow_style=False))
+
+
+layout_app = typer.Typer(
+    name="layout",
+    help="Layout management commands.",
+)
+app.add_typer(layout_app, name="layout")
+
+
+@layout_app.command("list")
+def layout_list() -> None:
+    """List all available layouts (built-in and custom)."""
+    from rich.table import Table
+
+    from cctmux.layouts import LAYOUT_DESCRIPTIONS
+
+    config, _warnings = load_config(project_dir=Path.cwd())
+
+    table = Table(title="Available Layouts")
+    table.add_column("Name", style="cyan")
+    table.add_column("Type", style="dim")
+    table.add_column("Description")
+
+    # Built-in layouts
+    for lt in LayoutType:
+        desc = LAYOUT_DESCRIPTIONS.get(lt, "")
+        table.add_row(lt.value, "built-in", desc)
+
+    # Custom layouts
+    for cl in config.custom_layouts:
+        table.add_row(cl.name, "custom", cl.description)
+
+    console.print(table)
+
+
+@layout_app.command("show")
+def layout_show(
+    name: Annotated[
+        str,
+        typer.Argument(help="Layout name to show."),
+    ],
+) -> None:
+    """Show layout details."""
+    import yaml
+
+    from cctmux.layouts import BUILTIN_TEMPLATES, LAYOUT_DESCRIPTIONS
+
+    # Check built-in
+    try:
+        lt = LayoutType(name)
+        console.print(f"[cyan]{name}[/] [dim](built-in)[/]")
+        desc = LAYOUT_DESCRIPTIONS.get(lt, "")
+        if desc:
+            console.print(f"  {desc}")
+        template = BUILTIN_TEMPLATES.get(lt)
+        if template:
+            console.print("\n[dim]Template representation:[/]")
+            splits_data = [s.model_dump() for s in template]
+            console.print(yaml.dump({"splits": splits_data}, default_flow_style=False))
+        return
+    except ValueError:
+        pass
+
+    # Check custom
+    config, _warnings = load_config(project_dir=Path.cwd())
+    for cl in config.custom_layouts:
+        if cl.name == name:
+            console.print(f"[cyan]{name}[/] [dim](custom)[/]")
+            if cl.description:
+                console.print(f"  {cl.description}")
+            data = cl.model_dump()
+            console.print(yaml.dump(data, default_flow_style=False))
+            return
+
+    err_console.print(f"[red]Error:[/] Layout '{name}' not found.")
+    raise typer.Exit(1)
+
+
+@layout_app.command("add")
+def layout_add(
+    name: Annotated[
+        str,
+        typer.Argument(help="Name for the new custom layout."),
+    ],
+    from_layout: Annotated[
+        str | None,
+        typer.Option("--from", "-f", help="Copy from an existing layout as starting point."),
+    ] = None,
+) -> None:
+    """Create a new custom layout."""
+    import os
+    import tempfile
+
+    import yaml
+
+    from cctmux.layouts import BUILTIN_TEMPLATES
+
+    # Validate name
+    try:
+        validate_layout_name(name)
+    except ValueError as e:
+        err_console.print(f"[red]Error:[/] {e}")
+        raise typer.Exit(1) from None
+
+    config, _warnings = load_config(project_dir=Path.cwd())
+
+    # Check if name already exists in custom layouts
+    if any(cl.name == name for cl in config.custom_layouts):
+        err_console.print(f"[red]Error:[/] Custom layout '{name}' already exists. Use 'layout edit' to modify.")
+        raise typer.Exit(1)
+
+    # Build template YAML
+    if from_layout:
+        # Try built-in
+        try:
+            lt = LayoutType(from_layout)
+            template = BUILTIN_TEMPLATES.get(lt)
+            splits_data = [s.model_dump(exclude_defaults=True) for s in template] if template else []
+            layout_data = {
+                "name": name,
+                "description": f"Custom layout based on {from_layout}",
+                "splits": splits_data,
+                "focus_main": True,
+            }
+        except ValueError:
+            # Try custom
+            source = next((cl for cl in config.custom_layouts if cl.name == from_layout), None)
+            if source is None:
+                err_console.print(f"[red]Error:[/] Source layout '{from_layout}' not found.")
+                raise typer.Exit(1) from None
+            layout_data = source.model_dump()
+            layout_data["name"] = name
+            layout_data["description"] = f"Custom layout based on {from_layout}"
+    else:
+        layout_data = {
+            "name": name,
+            "description": "My custom layout",
+            "splits": [
+                {"direction": "h", "size": 40, "command": "", "name": "right", "target": "main"},
+            ],
+            "focus_main": True,
+        }
+
+    yaml_content = yaml.dump(layout_data, default_flow_style=False, sort_keys=False)
+
+    # Open in editor
+    editor = os.environ.get("EDITOR", "vi")
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
+        f.write(f"# Custom layout: {name}\n")
+        f.write("# Edit this file, save and close to create the layout.\n")
+        f.write("# Delete all content to cancel.\n\n")
+        f.write(yaml_content)
+        tmp_path = f.name
+
+    try:
+        os.system(f'{editor} "{tmp_path}"')  # noqa: S605
+
+        # Read back
+        content = Path(tmp_path).read_text(encoding="utf-8")
+        # Strip comment lines for emptiness check
+        stripped = "\n".join(line for line in content.splitlines() if not line.strip().startswith("#"))
+        if not stripped.strip():
+            console.print("[yellow]Cancelled.[/]")
+            return
+
+        parsed = yaml.safe_load(content)
+        if not isinstance(parsed, dict):
+            err_console.print("[red]Error:[/] Invalid YAML — expected a mapping.")
+            raise typer.Exit(1)
+
+        # Validate
+        try:
+            new_layout = CustomLayout.model_validate(parsed)
+            validate_layout_name(new_layout.name)
+        except (ValueError, Exception) as e:
+            err_console.print(f"[red]Error:[/] Invalid layout: {e}")
+            raise typer.Exit(1) from None
+
+        # Add to config and save
+        config.custom_layouts.append(new_layout)
+        save_config(config)
+        console.print(f"[green]✓[/] Custom layout '{new_layout.name}' added.")
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
+
+
+@layout_app.command("remove")
+def layout_remove(
+    name: Annotated[
+        str,
+        typer.Argument(help="Name of the custom layout to remove."),
+    ],
+) -> None:
+    """Remove a custom layout."""
+    # Prevent removing built-in
+    try:
+        LayoutType(name)
+        err_console.print(f"[red]Error:[/] '{name}' is a built-in layout and cannot be removed.")
+        raise typer.Exit(1)
+    except ValueError:
+        pass
+
+    config, _warnings = load_config(project_dir=Path.cwd())
+    original_count = len(config.custom_layouts)
+    config.custom_layouts = [cl for cl in config.custom_layouts if cl.name != name]
+
+    if len(config.custom_layouts) == original_count:
+        err_console.print(f"[red]Error:[/] Custom layout '{name}' not found.")
+        raise typer.Exit(1)
+
+    save_config(config)
+    console.print(f"[green]✓[/] Custom layout '{name}' removed.")
+
+
+@layout_app.command("edit")
+def layout_edit(
+    name: Annotated[
+        str,
+        typer.Argument(help="Name of the custom layout to edit."),
+    ],
+) -> None:
+    """Edit an existing custom layout."""
+    import os
+    import tempfile
+
+    import yaml
+
+    # Prevent editing built-in
+    try:
+        LayoutType(name)
+        err_console.print(f"[red]Error:[/] '{name}' is a built-in layout and cannot be edited.")
+        raise typer.Exit(1)
+    except ValueError:
+        pass
+
+    config, _warnings = load_config(project_dir=Path.cwd())
+    layout_idx = next((i for i, cl in enumerate(config.custom_layouts) if cl.name == name), None)
+
+    if layout_idx is None:
+        err_console.print(f"[red]Error:[/] Custom layout '{name}' not found.")
+        raise typer.Exit(1)
+
+    current = config.custom_layouts[layout_idx]
+    yaml_content = yaml.dump(current.model_dump(), default_flow_style=False, sort_keys=False)
+
+    editor = os.environ.get("EDITOR", "vi")
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
+        f.write(f"# Editing custom layout: {name}\n")
+        f.write("# Save and close to apply changes. Delete all content to cancel.\n\n")
+        f.write(yaml_content)
+        tmp_path = f.name
+
+    try:
+        os.system(f'{editor} "{tmp_path}"')  # noqa: S605
+
+        content = Path(tmp_path).read_text(encoding="utf-8")
+        stripped = "\n".join(line for line in content.splitlines() if not line.strip().startswith("#"))
+        if not stripped.strip():
+            console.print("[yellow]Cancelled.[/]")
+            return
+
+        parsed = yaml.safe_load(content)
+        if not isinstance(parsed, dict):
+            err_console.print("[red]Error:[/] Invalid YAML — expected a mapping.")
+            raise typer.Exit(1)
+
+        try:
+            updated_layout = CustomLayout.model_validate(parsed)
+            validate_layout_name(updated_layout.name)
+        except (ValueError, Exception) as e:
+            err_console.print(f"[red]Error:[/] Invalid layout: {e}")
+            raise typer.Exit(1) from None
+
+        config.custom_layouts[layout_idx] = updated_layout
+        save_config(config)
+        console.print(f"[green]✓[/] Custom layout '{updated_layout.name}' updated.")
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

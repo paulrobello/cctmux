@@ -55,6 +55,7 @@ cctmux [OPTIONS] [COMMAND]
 | `--dry-run` | `-n` | Preview commands without executing | `false` |
 | `--config` | `-C` | Config file path | `~/.config/cctmux/config.yaml` |
 | `--dump-config` | | Output current configuration | `false` |
+| `--strict` | | Validate config strictly; exit on warnings | `false` |
 | `--claude-args` | `-a` | Arguments to pass to claude command | `None` |
 | `--yolo` | `-y` | Append `--dangerously-skip-permissions` to claude invocation | `false` |
 | `--task-list-id` | `-T` | Set `CLAUDE_CODE_TASK_LIST_ID` to session name | `false` |
@@ -78,12 +79,21 @@ cctmux [OPTIONS] [COMMAND]
 
 In addition to the predefined layouts, Claude can save and recall custom pane arrangements stored in the config file. See [Saved Layouts](LAYOUTS.md#saved-layouts) for details.
 
+Custom layouts can also be defined in the config file or via `cctmux layout add`. See [Custom Layouts](LAYOUTS.md#custom-layouts) for details.
+
 ### Subcommands
 
 | Command | Description |
 |---------|-------------|
 | `install-skill` | Install the cc-tmux skill to `~/.claude/skills/` |
 | `init-config` | Create default configuration file |
+| `config validate` | Validate all config files and display warnings |
+| `config show` | Display effective merged configuration |
+| `layout list` | List all layouts (built-in and custom) |
+| `layout show <name>` | Show layout details or YAML representation |
+| `layout add <name>` | Create a new custom layout (opens in $EDITOR) |
+| `layout remove <name>` | Delete a custom layout |
+| `layout edit <name>` | Edit a custom layout (opens in $EDITOR) |
 
 ### Examples
 
@@ -126,6 +136,27 @@ cctmux -T
 
 # Show current config
 cctmux --dump-config
+
+# Validate config files
+cctmux config validate
+
+# Show effective config
+cctmux config show
+
+# List all layouts
+cctmux layout list
+
+# Show details of a layout
+cctmux layout show cc-mon
+
+# Create custom layout from built-in template
+cctmux layout add my-layout --from cc-mon
+
+# Use a custom layout
+cctmux -l my-layout
+
+# Strict mode (exit on config warnings)
+cctmux --strict
 ```
 
 ### Session Control Flags

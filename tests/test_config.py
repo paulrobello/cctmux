@@ -3,16 +3,23 @@
 import tempfile
 from pathlib import Path
 
+import pytest
 import yaml
 
 from cctmux.config import (
     Config,
+    ConfigWarning,
+    CustomLayout,
     GitMonitorConfig,
     LayoutType,
+    PaneSplit,
+    SplitDirection,
     _deep_merge,
     _load_yaml_file,
+    display_config_warnings,
     load_config,
     save_config,
+    validate_layout_name,
 )
 
 
@@ -111,40 +118,46 @@ class TestLoadYamlFile:
 
     def test_missing_file(self) -> None:
         """Should return empty dict for missing file."""
-        result = _load_yaml_file(Path("/nonexistent/path/config.yaml"))
-        assert result == {}
+        data, warnings = _load_yaml_file(Path("/nonexistent/path/config.yaml"))
+        assert data == {}
+        assert warnings == []
 
     def test_valid_yaml(self) -> None:
         """Should parse valid YAML file."""
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "test.yaml"
             path.write_text(yaml.dump({"key": "value"}), encoding="utf-8")
-            result = _load_yaml_file(path)
-            assert result == {"key": "value"}
+            data, warnings = _load_yaml_file(path)
+            assert data == {"key": "value"}
+            assert warnings == []
 
     def test_empty_file(self) -> None:
         """Should return empty dict for empty file."""
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "test.yaml"
             path.write_text("", encoding="utf-8")
-            result = _load_yaml_file(path)
-            assert result == {}
+            data, warnings = _load_yaml_file(path)
+            assert data == {}
+            assert warnings == []
 
     def test_invalid_yaml(self) -> None:
-        """Should return empty dict for invalid YAML."""
+        """Should return empty dict with warning for invalid YAML."""
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "test.yaml"
             path.write_text("invalid: yaml: content:", encoding="utf-8")
-            result = _load_yaml_file(path)
-            assert result == {}
+            data, warnings = _load_yaml_file(path)
+            assert data == {}
+            assert len(warnings) == 1
+            assert "YAML parse error" in warnings[0].message
 
     def test_non_dict_yaml(self) -> None:
         """Should return empty dict when YAML is not a dict."""
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "test.yaml"
             path.write_text("- item1\n- item2\n", encoding="utf-8")
-            result = _load_yaml_file(path)
-            assert result == {}
+            data, warnings = _load_yaml_file(path)
+            assert data == {}
+            assert warnings == []
 
 
 class TestLoadConfig:
@@ -154,8 +167,9 @@ class TestLoadConfig:
         """Should return defaults when file doesn't exist."""
         with tempfile.TemporaryDirectory() as tmpdir:
             config_path = Path(tmpdir) / "nonexistent.yaml"
-            config = load_config(config_path)
+            config, warnings = load_config(config_path)
             assert config == Config()
+            assert warnings == []
 
     def test_loads_valid_config(self) -> None:
         """Should load valid config from file."""
@@ -171,26 +185,55 @@ class TestLoadConfig:
                 ),
                 encoding="utf-8",
             )
-            config = load_config(config_path)
+            config, warnings = load_config(config_path)
             assert config.default_layout == LayoutType.EDITOR
             assert config.status_bar_enabled is True
             assert config.max_history_entries == 25
+            assert warnings == []
 
-    def test_invalid_yaml_returns_defaults(self) -> None:
-        """Should return defaults for invalid YAML."""
+    def test_invalid_yaml_returns_defaults_with_warning(self) -> None:
+        """Should return defaults with warning for invalid YAML."""
         with tempfile.TemporaryDirectory() as tmpdir:
             config_path = Path(tmpdir) / "config.yaml"
             config_path.write_text("invalid: yaml: content:", encoding="utf-8")
-            config = load_config(config_path)
+            config, warnings = load_config(config_path)
             assert config == Config()
+            assert len(warnings) == 1
+            assert "YAML parse error" in warnings[0].message
 
     def test_empty_file_returns_defaults(self) -> None:
         """Should return defaults for empty file."""
         with tempfile.TemporaryDirectory() as tmpdir:
             config_path = Path(tmpdir) / "config.yaml"
             config_path.write_text("", encoding="utf-8")
-            config = load_config(config_path)
+            config, warnings = load_config(config_path)
             assert config == Config()
+            assert warnings == []
+
+    def test_validation_error_returns_warnings(self) -> None:
+        """Should return warnings for invalid config values."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.yaml"
+            config_path.write_text(
+                yaml.dump({"max_history_entries": "not-a-number"}),
+                encoding="utf-8",
+            )
+            config, warnings = load_config(config_path)
+            assert len(warnings) >= 1
+            # Should still get a usable config (partial recovery)
+            assert isinstance(config, Config)
+
+    def test_strict_mode_no_recovery(self) -> None:
+        """Strict mode should not attempt partial recovery."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.yaml"
+            config_path.write_text(
+                yaml.dump({"max_history_entries": "not-a-number"}),
+                encoding="utf-8",
+            )
+            config, warnings = load_config(config_path, strict=True)
+            assert len(warnings) >= 1
+            assert config == Config()  # defaults, no recovery
 
 
 class TestLayeredConfig:
@@ -213,7 +256,7 @@ class TestLayeredConfig:
                 encoding="utf-8",
             )
 
-            config = load_config(user_config, project_dir=project_dir)
+            config, _warnings = load_config(user_config, project_dir=project_dir)
             assert config.default_layout == LayoutType.CC_MON
             # User value preserved when project doesn't override
             assert config.status_bar_enabled is True
@@ -239,7 +282,7 @@ class TestLayeredConfig:
                 encoding="utf-8",
             )
 
-            config = load_config(user_config, project_dir=project_dir)
+            config, _warnings = load_config(user_config, project_dir=project_dir)
             assert config.default_layout == LayoutType.TRIPLE
             # User value preserved
             assert config.max_history_entries == 100
@@ -269,7 +312,7 @@ class TestLayeredConfig:
                 encoding="utf-8",
             )
 
-            config = load_config(user_config, project_dir=project_dir)
+            config, _warnings = load_config(user_config, project_dir=project_dir)
             assert config.git_monitor.fetch_enabled is True
             # Sibling fields preserved from user config
             assert config.git_monitor.show_log is True
@@ -289,7 +332,7 @@ class TestLayeredConfig:
                 encoding="utf-8",
             )
 
-            config = load_config(user_config, project_dir=project_dir)
+            config, _warnings = load_config(user_config, project_dir=project_dir)
             assert config.default_layout == LayoutType.EDITOR
 
     def test_no_project_dir(self) -> None:
@@ -301,7 +344,7 @@ class TestLayeredConfig:
                 encoding="utf-8",
             )
 
-            config = load_config(user_config)
+            config, _warnings = load_config(user_config)
             assert config.default_layout == LayoutType.MONITOR
 
     def test_ignore_parent_configs_in_project(self) -> None:
@@ -326,7 +369,7 @@ class TestLayeredConfig:
                 encoding="utf-8",
             )
 
-            config = load_config(user_config, project_dir=project_dir)
+            config, _warnings = load_config(user_config, project_dir=project_dir)
             assert config.default_layout == LayoutType.CC_MON
             # User config was ignored, so status_bar_enabled should be default
             assert config.status_bar_enabled is False
@@ -352,7 +395,7 @@ class TestLayeredConfig:
                 encoding="utf-8",
             )
 
-            config = load_config(user_config, project_dir=project_dir)
+            config, _warnings = load_config(user_config, project_dir=project_dir)
             # Project config value applied
             assert config.default_layout == LayoutType.CC_MON
             # User config was ignored
@@ -384,7 +427,7 @@ class TestLayeredConfig:
                 encoding="utf-8",
             )
 
-            config = load_config(user_config, project_dir=project_dir)
+            config, _warnings = load_config(user_config, project_dir=project_dir)
             # Local overrides project
             assert config.default_layout == LayoutType.TRIPLE
 
@@ -450,3 +493,190 @@ class TestLayoutTypeGitMon:
         config = Config()
         assert hasattr(config, "git_monitor")
         assert isinstance(config.git_monitor, GitMonitorConfig)
+
+
+class TestConfigWarning:
+    """Tests for ConfigWarning dataclass."""
+
+    def test_create_warning(self) -> None:
+        """Should create a warning with all fields."""
+        warning = ConfigWarning(
+            file="test.yaml",
+            field_name="max_history_entries",
+            message="expected int, got str",
+            value="abc",
+        )
+        assert warning.file == "test.yaml"
+        assert warning.field_name == "max_history_entries"
+        assert warning.message == "expected int, got str"
+        assert warning.value == "abc"
+
+    def test_default_value_none(self) -> None:
+        """Should default value to None."""
+        warning = ConfigWarning(file="test.yaml", field_name="x", message="error")
+        assert warning.value is None
+
+
+class TestDisplayConfigWarnings:
+    """Tests for display_config_warnings function."""
+
+    def test_no_warnings_no_output(self) -> None:
+        """Should not print anything when no warnings."""
+        from io import StringIO
+
+        from rich.console import Console
+
+        output = StringIO()
+        test_console = Console(file=output, no_color=True)
+        display_config_warnings([], test_console)
+        assert output.getvalue() == ""
+
+    def test_displays_warnings(self) -> None:
+        """Should display warnings in a panel."""
+        from io import StringIO
+
+        from rich.console import Console
+
+        output = StringIO()
+        test_console = Console(file=output, no_color=True)
+        warnings = [
+            ConfigWarning(file="config.yaml", field_name="layout", message="invalid value", value="bad"),
+        ]
+        display_config_warnings(warnings, test_console)
+        result = output.getvalue()
+        assert "Config Warnings" in result
+        assert "config.yaml" in result
+        assert "invalid value" in result
+
+
+class TestSplitDirection:
+    """Tests for SplitDirection enum."""
+
+    def test_horizontal_value(self) -> None:
+        """Should have 'h' value."""
+        assert SplitDirection.HORIZONTAL.value == "h"
+
+    def test_vertical_value(self) -> None:
+        """Should have 'v' value."""
+        assert SplitDirection.VERTICAL.value == "v"
+
+
+class TestPaneSplit:
+    """Tests for PaneSplit model."""
+
+    def test_defaults(self) -> None:
+        """Should have correct defaults."""
+        split = PaneSplit(direction=SplitDirection.HORIZONTAL, size=30)
+        assert split.command == ""
+        assert split.name == ""
+        assert split.target == "main"
+        assert split.focus is False
+
+    def test_full_spec(self) -> None:
+        """Should accept all fields."""
+        split = PaneSplit(
+            direction=SplitDirection.VERTICAL,
+            size=50,
+            command="cctmux-tasks",
+            name="tasks",
+            target="right",
+            focus=True,
+        )
+        assert split.direction == SplitDirection.VERTICAL
+        assert split.size == 50
+        assert split.command == "cctmux-tasks"
+        assert split.name == "tasks"
+        assert split.target == "right"
+        assert split.focus is True
+
+
+class TestCustomLayout:
+    """Tests for CustomLayout model."""
+
+    def test_defaults(self) -> None:
+        """Should have correct defaults."""
+        layout = CustomLayout(name="test")
+        assert layout.description == ""
+        assert layout.splits == []
+        assert layout.focus_main is True
+
+    def test_with_splits(self) -> None:
+        """Should accept PaneSplit objects."""
+        layout = CustomLayout(
+            name="my-layout",
+            description="A custom layout",
+            splits=[
+                PaneSplit(direction=SplitDirection.HORIZONTAL, size=40),
+                PaneSplit(direction=SplitDirection.VERTICAL, size=50, target="last"),
+            ],
+        )
+        assert len(layout.splits) == 2
+        assert layout.splits[0].direction == SplitDirection.HORIZONTAL
+
+    def test_config_with_custom_layouts(self) -> None:
+        """Config should load custom layouts from YAML."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.yaml"
+            config_path.write_text(
+                yaml.dump(
+                    {
+                        "custom_layouts": [
+                            {
+                                "name": "my-layout",
+                                "description": "Test layout",
+                                "splits": [
+                                    {"direction": "h", "size": 40},
+                                    {"direction": "v", "size": 50, "command": "htop", "target": "last"},
+                                ],
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config, warnings = load_config(config_path)
+            assert warnings == []
+            assert len(config.custom_layouts) == 1
+            assert config.custom_layouts[0].name == "my-layout"
+            assert len(config.custom_layouts[0].splits) == 2
+
+
+class TestValidateLayoutName:
+    """Tests for validate_layout_name function."""
+
+    def test_valid_names(self) -> None:
+        """Should accept valid names."""
+        assert validate_layout_name("my-layout") == "my-layout"
+        assert validate_layout_name("test") == "test"
+        assert validate_layout_name("dev-2") == "dev-2"
+
+    def test_empty_name_raises(self) -> None:
+        """Should reject empty name."""
+        with pytest.raises(ValueError, match="cannot be empty"):
+            validate_layout_name("")
+
+    def test_uppercase_raises(self) -> None:
+        """Should reject uppercase names."""
+        with pytest.raises(ValueError, match="lowercase"):
+            validate_layout_name("MyLayout")
+
+    def test_special_chars_raises(self) -> None:
+        """Should reject names with special characters."""
+        with pytest.raises(ValueError, match="lowercase"):
+            validate_layout_name("my_layout")
+
+    def test_leading_hyphen_raises(self) -> None:
+        """Should reject names with leading hyphens."""
+        with pytest.raises(ValueError, match="lowercase"):
+            validate_layout_name("-layout")
+
+    def test_builtin_collision_raises(self) -> None:
+        """Should reject names that collide with built-in layouts."""
+        with pytest.raises(ValueError, match="conflicts with built-in"):
+            validate_layout_name("editor")
+
+    def test_all_builtins_rejected(self) -> None:
+        """Should reject all built-in layout names."""
+        for lt in LayoutType:
+            with pytest.raises(ValueError, match="conflicts with built-in"):
+                validate_layout_name(lt.value)

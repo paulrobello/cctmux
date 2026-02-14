@@ -1,11 +1,15 @@
 """Configuration management for cctmux."""
 
+from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from typing import cast
 
 import yaml
 from pydantic import BaseModel, ValidationError
+from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
 
 from cctmux.xdg_paths import get_config_file_path
 
@@ -103,12 +107,74 @@ class GitMonitorConfig(BaseModel):
     fetch_interval: float = 60.0
 
 
+class SplitDirection(StrEnum):
+    """Direction for a pane split."""
+
+    HORIZONTAL = "h"  # side-by-side (left/right)
+    VERTICAL = "v"  # stacked (top/bottom)
+
+
+class PaneSplit(BaseModel):
+    """A single split operation in a custom layout."""
+
+    direction: SplitDirection
+    size: int  # percentage for the new pane (1-90)
+    command: str = ""  # command to run in the new pane (optional)
+    name: str = ""  # name for referencing in later splits
+    target: str = "main"  # pane to split: "main", "last", or a named pane
+    focus: bool = False  # focus this pane after layout is applied
+
+
+def validate_layout_name(name: str) -> str:
+    """Validate that a custom layout name is valid.
+
+    Must be lowercase, hyphens-only (like session names), and must NOT collide
+    with any built-in LayoutType value.
+
+    Args:
+        name: The layout name to validate.
+
+    Returns:
+        The validated name.
+
+    Raises:
+        ValueError: If the name is invalid or collides with a built-in layout.
+    """
+    import re
+
+    if not name:
+        raise ValueError("Layout name cannot be empty")
+
+    if not re.match(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", name):
+        raise ValueError(
+            f"Layout name '{name}' must be lowercase alphanumeric with hyphens, no leading/trailing hyphens"
+        )
+
+    # Check collision with built-in layouts
+    builtin_values = {lt.value for lt in LayoutType}
+    if name in builtin_values:
+        raise ValueError(f"Layout name '{name}' conflicts with built-in layout")
+
+    return name
+
+
 class CustomLayout(BaseModel):
     """Custom layout definition."""
 
     name: str
     description: str = ""
-    splits: list[dict[str, str | int]] = []
+    splits: list[PaneSplit] = []
+    focus_main: bool = True  # focus main pane at end (unless a split has focus=True)
+
+
+@dataclass
+class ConfigWarning:
+    """A config validation warning."""
+
+    file: str
+    field_name: str
+    message: str
+    value: object = field(default=None, repr=False)
 
 
 class Config(BaseModel):
@@ -156,28 +222,48 @@ def _deep_merge(base: dict[str, object], override: dict[str, object]) -> dict[st
     return result
 
 
-def _load_yaml_file(path: Path) -> dict[str, object]:
-    """Load a YAML file and return its contents as a dict.
+def _load_yaml_file(path: Path) -> tuple[dict[str, object], list[ConfigWarning]]:
+    """Load a YAML file and return its contents as a dict with warnings.
 
     Args:
         path: Path to the YAML file.
 
     Returns:
-        Parsed dict, or empty dict if file is missing or invalid.
+        Tuple of (parsed dict, list of warnings). Empty dict on missing/invalid.
     """
     if not path.exists():
-        return {}
+        return {}, []
     try:
         with path.open(encoding="utf-8") as f:
             raw = yaml.safe_load(f)
         if not isinstance(raw, dict):
-            return {}
-        return cast(dict[str, object], raw)
-    except (yaml.YAMLError, OSError):
-        return {}
+            return {}, []
+        return cast(dict[str, object], raw), []
+    except yaml.YAMLError as e:
+        return {}, [
+            ConfigWarning(
+                file=str(path),
+                field_name="(file)",
+                message=f"YAML parse error: {e}",
+                value=None,
+            )
+        ]
+    except OSError as e:
+        return {}, [
+            ConfigWarning(
+                file=str(path),
+                field_name="(file)",
+                message=f"File read error: {e}",
+                value=None,
+            )
+        ]
 
 
-def load_config(config_path: Path | None = None, project_dir: Path | None = None) -> Config:
+def load_config(
+    config_path: Path | None = None,
+    project_dir: Path | None = None,
+    strict: bool = False,
+) -> tuple[Config, list[ConfigWarning]]:
     """Load configuration with layered merging.
 
     Loading order (last value wins via deep merge):
@@ -191,15 +277,22 @@ def load_config(config_path: Path | None = None, project_dir: Path | None = None
     Args:
         config_path: Optional path to user config file. Uses default if None.
         project_dir: Optional project directory containing .cctmux.yaml files.
+        strict: If True, do not attempt partial recovery on validation errors.
 
     Returns:
-        The loaded configuration, or defaults if no valid config found.
+        Tuple of (loaded Config, list of ConfigWarnings).
     """
-    user_config = _load_yaml_file(config_path or get_config_file_path())
+    warnings: list[ConfigWarning] = []
+
+    user_config_path = config_path or get_config_file_path()
+    user_config, user_warnings = _load_yaml_file(user_config_path)
+    warnings.extend(user_warnings)
 
     if project_dir:
-        project_config = _load_yaml_file(project_dir / ".cctmux.yaml")
-        local_config = _load_yaml_file(project_dir / ".cctmux.yaml.local")
+        project_config, proj_warnings = _load_yaml_file(project_dir / ".cctmux.yaml")
+        warnings.extend(proj_warnings)
+        local_config, local_warnings = _load_yaml_file(project_dir / ".cctmux.yaml.local")
+        warnings.extend(local_warnings)
 
         # Check if any project config wants to ignore parent configs
         ignore_parent = project_config.get("ignore_parent_configs", False) or local_config.get(
@@ -217,9 +310,69 @@ def load_config(config_path: Path | None = None, project_dir: Path | None = None
         merged = user_config
 
     try:
-        return Config.model_validate(merged)
-    except (ValueError, ValidationError):
-        return Config()
+        return Config.model_validate(merged), warnings
+    except (ValueError, ValidationError) as e:
+        if isinstance(e, ValidationError):
+            for error in e.errors():
+                field_path = ".".join(str(loc) for loc in error["loc"])
+                warnings.append(
+                    ConfigWarning(
+                        file="merged config",
+                        field_name=field_path,
+                        message=error["msg"],
+                        value=error.get("input"),
+                    )
+                )
+        else:
+            warnings.append(
+                ConfigWarning(
+                    file="merged config",
+                    field_name="(unknown)",
+                    message=str(e),
+                    value=None,
+                )
+            )
+
+        if strict:
+            return Config(), warnings
+
+        # Attempt partial recovery: remove bad fields and retry
+        if isinstance(e, ValidationError):
+            for error in e.errors():
+                # Remove the top-level key that caused the error
+                if error["loc"]:
+                    top_key = str(error["loc"][0])
+                    merged.pop(top_key, None)
+            try:
+                return Config.model_validate(merged), warnings
+            except (ValueError, ValidationError):
+                pass
+
+        return Config(), warnings
+
+
+def display_config_warnings(warnings: list[ConfigWarning], console: Console) -> None:
+    """Display config warnings using Rich formatting.
+
+    Args:
+        warnings: List of warnings to display.
+        console: Rich console to output to.
+    """
+    if not warnings:
+        return
+
+    text = Text()
+    for i, warning in enumerate(warnings):
+        if i > 0:
+            text.append("\n")
+        text.append(f"  {warning.file}", style="dim")
+        text.append(": ", style="dim")
+        text.append(warning.field_name, style="bold")
+        text.append(f" — {warning.message}", style="yellow")
+        if warning.value is not None:
+            text.append(f" (got: {warning.value!r})", style="dim")
+
+    console.print(Panel(text, title="[yellow]Config Warnings[/]", border_style="yellow"))
 
 
 def save_config(config: Config, config_path: Path | None = None) -> None:

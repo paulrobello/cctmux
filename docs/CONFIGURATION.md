@@ -8,6 +8,7 @@ Complete reference for cctmux configuration options, presets, and customization.
 - [Configuration File](#configuration-file)
 - [Project Configuration](#project-configuration)
 - [Configuration Options](#configuration-options)
+- [Custom Layouts](#custom-layouts)
 - [Monitor Configurations](#monitor-configurations)
 - [Presets](#presets)
 - [CLI Overrides](#cli-overrides)
@@ -77,6 +78,22 @@ Display the effective configuration:
 ```bash
 cctmux --dump-config
 ```
+
+### Validating Configuration
+
+Validate all config files (user, project, local) and display any warnings:
+
+```bash
+cctmux config validate
+```
+
+Use strict mode to exit with an error on config warnings:
+
+```bash
+cctmux --strict
+```
+
+In non-strict mode (default), invalid config values produce warnings and fall back to defaults.
 
 ### Example Configuration
 
@@ -156,8 +173,18 @@ ralph_monitor:
   show_task_progress: true
   max_iterations_visible: 20
 
-# Custom layouts (advanced)
-custom_layouts: []
+# Custom layouts
+custom_layouts:
+  - name: dev-monitor
+    description: "Task monitor + git monitor side by side"
+    splits:
+      - direction: h
+        size: 50
+        command: "cctmux-tasks -g"
+      - direction: v
+        size: 50
+        target: last
+        command: "cctmux-git"
 ```
 
 ## Project Configuration
@@ -265,6 +292,76 @@ git_monitor:
 | `ralph` | Shell + ralph monitor side-by-side |
 | `ralph-full` | Shell + ralph monitor + task monitor |
 | `git-mon` | Claude + git status monitor |
+
+### Custom Layouts
+
+Custom layouts extend the built-in layout options with user-defined pane arrangements. They are stored in the `custom_layouts` list in the config file.
+
+#### Custom Layout Schema
+
+Each custom layout consists of a name, optional description, and a list of split operations:
+
+```yaml
+custom_layouts:
+  - name: my-monitor
+    description: "Session monitor and git side by side"
+    focus_main: true
+    splits:
+      - direction: h
+        size: 50
+        command: "cctmux-session"
+        name: session
+      - direction: v
+        size: 50
+        command: "cctmux-git"
+        target: session
+        name: git
+```
+
+#### Split Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `direction` | string | (required) | Split direction: `h` (horizontal/side-by-side) or `v` (vertical/stacked) |
+| `size` | integer | (required) | Percentage for the new pane (1-90) |
+| `command` | string | `""` | Command to run in the new pane |
+| `name` | string | `""` | Name for referencing in later splits |
+| `target` | string | `"main"` | Pane to split: `"main"`, `"last"`, or a named pane |
+| `focus` | boolean | `false` | Focus this pane after layout is applied |
+
+#### Layout-Level Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `name` | string | (required) | Lowercase alphanumeric with hyphens; must not conflict with built-in layout names |
+| `description` | string | `""` | Human-readable description |
+| `splits` | list | `[]` | List of split operations |
+| `focus_main` | boolean | `true` | Focus main pane at end (unless a split has `focus: true`) |
+
+#### Managing Custom Layouts via CLI
+
+```bash
+# List all layouts (built-in + custom)
+cctmux layout list
+
+# Show layout details
+cctmux layout show my-monitor
+
+# Create from built-in template
+cctmux layout add my-layout --from cc-mon
+
+# Create from scratch (opens $EDITOR)
+cctmux layout add my-layout
+
+# Edit existing custom layout
+cctmux layout edit my-layout
+
+# Remove custom layout
+cctmux layout remove my-layout
+
+# Use a custom layout
+cctmux -l my-layout
+```
 
 ## Monitor Configurations
 

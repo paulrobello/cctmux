@@ -174,12 +174,15 @@ cctmux [OPTIONS]
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--layout` | `-l` | Tmux layout (default, editor, monitor, triple, cc-mon, full-monitor, dashboard, ralph, ralph-full, git-mon) |
-| `--recent` | `-r` | Select from recent sessions using fzf |
-| `--status-bar` | `-s` | Enable status bar with git/project info |
+| `--resume` | `-r` | Append `--resume` to claude invocation to continue last conversation |
+| `--continue` | `-c` | Append `--continue` to claude invocation to continue most recent conversation |
+| `--yolo` | `-y` | Append `--dangerously-skip-permissions` to claude invocation |
 | `--claude-args` | `-a` | Arguments to pass to claude command |
+| `--recent` | `-R` | Select from recent sessions using fzf |
+| `--status-bar` | `-s` | Enable status bar with git/project info |
 | `--task-list-id` | `-T` | Set `CLAUDE_CODE_TASK_LIST_ID` env var |
 | `--dry-run` | `-n` | Preview commands without executing |
-| `--config` | `-c` | Custom config file path |
+| `--config` | `-C` | Custom config file path |
 | `--dump-config` | | Output current configuration |
 | `--debug` | `-D` | Enable debug output |
 | `--verbose` | `-v` | Increase verbosity (stackable) |

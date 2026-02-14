@@ -4,7 +4,7 @@ All notable changes to cctmux will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.2.0] - 2026-02-14
 
 ### Added
 
@@ -14,9 +14,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Git Monitor Presets**: Minimal, verbose, and debug presets for `cctmux-git`
 - **Git Monitor Remote Fetch**: Opt-in periodic remote fetch with `--fetch` flag to check for new remote commits, configurable interval via `--fetch-interval` (default 60s), and new Remote Commits panel
 - **Saved Layouts in Skill**: Claude can now save, recall, list, and delete custom pane layouts stored as YAML comment blocks in the config file
+- **Yolo Mode** (`--yolo`, `-y`): Shortcut flag to append `--dangerously-skip-permissions` to the Claude invocation
+- **Resume Mode** (`--resume`, `-r`): Shortcut flag to append `--resume` to the Claude invocation to continue the last conversation
+- **Continue Mode** (`--continue`, `-c`): Shortcut flag to append `--continue` to the Claude invocation to continue the most recent conversation
 
 ### Changed
 
+- **Recent Sessions**: Short flag changed from `-r` to `-R` to free `-r` for `--resume`
+- **Config Path**: Short flag changed from `-c` to `-C` to free `-c` for `--continue`
+- **Saved Layout Discovery in Skill**: Claude proactively checks the config file for saved layouts and presents them as options when users ask about pane management
 - **Par Mode**: Updated to use task monitor + git monitor (previously used session monitor + task monitor), Claude pane width adjusted to 50%
 
 ### Fixed

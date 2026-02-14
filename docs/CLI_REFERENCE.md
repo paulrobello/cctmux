@@ -46,14 +46,17 @@ cctmux [OPTIONS] [COMMAND]
 | Option | Short | Description | Default |
 |--------|-------|-------------|---------|
 | `--layout` | `-l` | Tmux layout to use | `default` |
-| `--recent` | `-r` | Select from recent sessions using fzf | `false` |
+| `--recent` | `-R` | Select from recent sessions using fzf | `false` |
+| `--resume` | `-r` | Append `--resume` to claude invocation to continue last conversation | `false` |
 | `--status-bar` | `-s` | Enable status bar with git/project info | `false` |
 | `--debug` | `-D` | Enable debug output | `false` |
 | `--verbose` | `-v` | Increase verbosity (stackable) | `0` |
+| `--continue` | `-c` | Append `--continue` to claude invocation to continue most recent conversation | `false` |
 | `--dry-run` | `-n` | Preview commands without executing | `false` |
-| `--config` | `-c` | Config file path | `~/.config/cctmux/config.yaml` |
+| `--config` | `-C` | Config file path | `~/.config/cctmux/config.yaml` |
 | `--dump-config` | | Output current configuration | `false` |
 | `--claude-args` | `-a` | Arguments to pass to claude command | `None` |
+| `--yolo` | `-y` | Append `--dangerously-skip-permissions` to claude invocation | `false` |
 | `--task-list-id` | `-T` | Set `CLAUDE_CODE_TASK_LIST_ID` to session name | `false` |
 | `--version` | | Show version | |
 | `--help` | | Show help | |
@@ -101,8 +104,17 @@ cctmux -l ralph
 # Pass arguments to claude
 cctmux -a "--model sonnet"
 
-# Select from recent sessions
+# Start with dangerously-skip-permissions
+cctmux -y
+
+# Continue most recent conversation
+cctmux -c
+
+# Resume last conversation
 cctmux -r
+
+# Select from recent sessions
+cctmux -R
 
 # Preview what would happen
 cctmux -n -v

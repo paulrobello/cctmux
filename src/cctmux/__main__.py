@@ -86,7 +86,11 @@ def main(
     ] = LayoutType.DEFAULT,
     recent: Annotated[
         bool,
-        typer.Option("--recent", "-r", help="Select from recent sessions using fzf."),
+        typer.Option("--recent", "-R", help="Select from recent sessions using fzf."),
+    ] = False,
+    resume: Annotated[
+        bool,
+        typer.Option("--resume", "-r", help="Append --resume to claude invocation to continue last conversation."),
     ] = False,
     status_bar: Annotated[
         bool,
@@ -106,8 +110,14 @@ def main(
     ] = False,
     config_path: Annotated[
         Path | None,
-        typer.Option("--config", "-c", help="Config file path."),
+        typer.Option("--config", "-C", help="Config file path."),
     ] = None,
+    continue_session: Annotated[
+        bool,
+        typer.Option(
+            "--continue", "-c", help="Append --continue to claude invocation to continue most recent conversation."
+        ),
+    ] = False,
     dump_config: Annotated[
         bool,
         typer.Option("--dump-config", help="Output current configuration."),
@@ -116,6 +126,10 @@ def main(
         str | None,
         typer.Option("--claude-args", "-a", help="Arguments to pass to claude command (e.g., '--model sonnet')."),
     ] = None,
+    yolo: Annotated[
+        bool,
+        typer.Option("--yolo", "-y", help="Append --dangerously-skip-permissions to claude invocation."),
+    ] = False,
     task_list_id: Annotated[
         bool,
         typer.Option("--task-list-id", "-T", help="Set CLAUDE_CODE_TASK_LIST_ID to session name."),
@@ -149,6 +163,27 @@ def main(
     effective_layout = layout if layout != LayoutType.DEFAULT else config.default_layout
     effective_status_bar = status_bar or config.status_bar_enabled
     effective_claude_args = claude_args if claude_args else config.default_claude_args
+    if yolo:
+        skip_flag = "--dangerously-skip-permissions"
+        if effective_claude_args:
+            if skip_flag not in effective_claude_args:
+                effective_claude_args = f"{effective_claude_args} {skip_flag}"
+        else:
+            effective_claude_args = skip_flag
+    if resume:
+        resume_flag = "--resume"
+        if effective_claude_args:
+            if resume_flag not in effective_claude_args:
+                effective_claude_args = f"{effective_claude_args} {resume_flag}"
+        else:
+            effective_claude_args = resume_flag
+    if continue_session:
+        continue_flag = "--continue"
+        if effective_claude_args:
+            if continue_flag not in effective_claude_args:
+                effective_claude_args = f"{effective_claude_args} {continue_flag}"
+        else:
+            effective_claude_args = continue_flag
     effective_task_list_id = task_list_id or config.task_list_id
 
     if debug or verbose > 1:

@@ -425,7 +425,35 @@ echo "Par mode activated"
 
 ## Saved Layouts
 
-Users can ask you to save the current pane layout (or describe a desired layout) with a name so it can be recalled later. Saved layouts are stored as YAML comment blocks at the end of `~/.config/cctmux/config.yaml`.
+**Proactive guidance**: When a user asks about pane management, layouts, or setting up their workspace, let them know they can:
+- **Save** the current layout (or describe a new one) with a name for later reuse
+- **Restore** a previously saved layout by name
+- **List** all saved layouts to see what's available
+- **Delete** saved layouts they no longer need
+
+### Check for Existing Saved Layouts (DO THIS FIRST)
+
+**Before creating or modifying pane layouts**, always check the config file for existing saved layouts and present them as options to the user. This avoids recreating layouts that already exist.
+
+```bash
+# Check for saved layouts in the config file
+grep -A1 '^# --- saved-layout:' ~/.config/cctmux/config.yaml 2>/dev/null
+```
+
+If saved layouts exist, present them to the user in a table like:
+
+| Saved Layout | Description |
+|--------------|-------------|
+| `dev-monitor` | Task monitor + git monitor side by side |
+| `dev-test` | Dev server on right, test runner below it |
+
+Then ask: *"Would you like to activate one of these saved layouts, or set up something different?"*
+
+If no saved layouts exist, inform the user: *"You don't have any saved layouts yet. I can set up panes for you now, and if you like the arrangement, I can save it for easy recall later."*
+
+### Storage Format
+
+Saved layouts are stored as YAML comment blocks at the end of `~/.config/cctmux/config.yaml`.
 
 ### Comment Block Format
 

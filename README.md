@@ -2,7 +2,7 @@
 
 Launch Claude Code inside tmux with session management, real-time monitoring, and pane awareness.
 
-![Python 3.14+](https://img.shields.io/badge/python-3.14+-blue)
+![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue)
 ![Runs on Linux | MacOS](https://img.shields.io/badge/runs%20on-Linux%20%7C%20MacOS-blue)
 ![Arch x86-64 | ARM | AppleSilicon](https://img.shields.io/badge/arch-x86--64%20%7C%20ARM%20%7C%20AppleSilicon-blue)
 ![License MIT](https://img.shields.io/badge/license-MIT-green)
@@ -310,6 +310,8 @@ cctmux-git --no-log             # Hide recent commits
 cctmux-git --no-diff            # Hide diff stats
 cctmux-git -m 20                # Show 20 recent commits
 cctmux-git --preset minimal     # Minimal display
+cctmux-git --fetch              # Enable periodic remote fetch
+cctmux-git --fetch -F 30        # Fetch every 30 seconds (default: 60s)
 ```
 
 **Features:**
@@ -318,6 +320,7 @@ cctmux-git --preset minimal     # Minimal display
 - Recent commits log with author and relative timestamps
 - Diff statistics with visual insertion/deletion bars
 - Stash count display
+- Periodic remote fetch with remote commits panel (opt-in via `--fetch`)
 
 ### Ralph Monitor (`cctmux-ralph`)
 
@@ -483,7 +486,7 @@ Inside a cctmux session:
 
 ## Requirements
 
-- **Python**: 3.14+
+- **Python**: 3.13+
 - **tmux**: Terminal multiplexer
 - **Claude Code**: Claude Code CLI (`claude`)
 - **fzf**: Optional, for `--recent` session selection

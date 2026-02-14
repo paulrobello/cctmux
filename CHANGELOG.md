@@ -12,10 +12,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Git-Mon Layout**: New `git-mon` layout providing Claude (60%) + git status monitor (40%) side-by-side
 - **Git Monitor Configuration**: `git_monitor` section in config with `show_log`, `show_diff`, `show_status`, `max_commits`, and `poll_interval` settings
 - **Git Monitor Presets**: Minimal, verbose, and debug presets for `cctmux-git`
+- **Git Monitor Remote Fetch**: Opt-in periodic remote fetch with `--fetch` flag to check for new remote commits, configurable interval via `--fetch-interval` (default 60s), and new Remote Commits panel
+- **Saved Layouts in Skill**: Claude can now save, recall, list, and delete custom pane layouts stored as YAML comment blocks in the config file
+
+### Changed
+
+- **Par Mode**: Updated to use task monitor + git monitor (previously used session monitor + task monitor), Claude pane width adjusted to 50%
 
 ### Fixed
 
 - Resolved pyright strict mode issues in git_monitor dataclass fields
+- **Install Skill**: Bundled skill files inside the package for wheel installs — previously the skill source path resolved relative to the repo root, which doesn't exist when installed via pip/uv
 
 ## [0.1.0] - 2026-02-06
 

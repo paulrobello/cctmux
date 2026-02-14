@@ -739,6 +739,18 @@ def git_main(
         bool,
         typer.Option("--no-status", help="Hide file status panel."),
     ] = False,
+    fetch: Annotated[
+        bool,
+        typer.Option("--fetch", "-f", help="Enable periodic git fetch to check for remote commits."),
+    ] = False,
+    no_fetch: Annotated[
+        bool,
+        typer.Option("--no-fetch", help="Disable periodic git fetch (overrides config/preset)."),
+    ] = False,
+    fetch_interval: Annotated[
+        float | None,
+        typer.Option("--fetch-interval", "-F", help="How often to fetch from remote (seconds, default: 60)."),
+    ] = None,
     preset: Annotated[
         ConfigPreset | None,
         typer.Option("--preset", help="Use preset configuration (minimal, verbose, debug)."),
@@ -751,7 +763,8 @@ def git_main(
     """Monitor git repository status with live updates.
 
     Shows branch info, file statuses, recent commits, and diff statistics.
-    Updates in real-time by polling git status.
+    Updates in real-time by polling git status. Use --fetch to periodically
+    check the remote for new commits.
 
     Examples:
         cctmux-git                      # Monitor current directory
@@ -759,6 +772,8 @@ def git_main(
         cctmux-git --no-log             # Hide recent commits
         cctmux-git --no-diff            # Hide diff stats
         cctmux-git -m 20               # Show 20 recent commits
+        cctmux-git --fetch              # Enable remote commit checking
+        cctmux-git --fetch -F 30        # Fetch every 30 seconds
         cctmux-git --preset minimal     # Minimal display
     """
     if ctx.invoked_subcommand is not None:
@@ -773,18 +788,32 @@ def git_main(
         effective_show_status = git_config.show_status
         effective_max_commits = git_config.max_commits
         effective_interval = git_config.poll_interval
+        effective_fetch_enabled = git_config.fetch_enabled
+        effective_fetch_interval = git_config.fetch_interval
     else:
         effective_show_log = not no_log
         effective_show_diff = not no_diff
         effective_show_status = not no_status
         effective_max_commits = max_commits
         effective_interval = interval
+        # Use config defaults when no preset
+        config = load_config()
+        effective_fetch_enabled = config.git_monitor.fetch_enabled
+        effective_fetch_interval = config.git_monitor.fetch_interval
 
     # CLI overrides preset
     if max_commits != 10:
         effective_max_commits = max_commits
     if interval != 2.0:
         effective_interval = interval
+
+    # --fetch / --no-fetch CLI flags override preset/config
+    if fetch:
+        effective_fetch_enabled = True
+    if no_fetch:
+        effective_fetch_enabled = False
+    if fetch_interval is not None:
+        effective_fetch_interval = fetch_interval
 
     run_git_monitor(
         repo_path=project,
@@ -793,6 +822,8 @@ def git_main(
         show_log=effective_show_log,
         show_diff=effective_show_diff,
         show_status=effective_show_status,
+        fetch_enabled=effective_fetch_enabled,
+        fetch_interval=effective_fetch_interval,
     )
 
 

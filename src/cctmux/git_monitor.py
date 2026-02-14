@@ -7,6 +7,7 @@ plus subprocess-based data collection.
 import re
 import subprocess
 from dataclasses import dataclass, field
+from datetime import UTC
 from enum import StrEnum
 from pathlib import Path
 
@@ -76,6 +77,8 @@ class GitStatus:
     last_commit_message: str = ""
     last_commit_author: str = ""
     last_commit_time: str = ""
+    remote_commits: list[CommitInfo] = field(default_factory=list[CommitInfo])
+    last_fetch_time: str = ""
 
 
 # Mapping from git porcelain status chars to FileStatus for staged changes (X position)
@@ -355,6 +358,49 @@ def collect_git_status(repo_path: Path, max_commits: int = 10) -> GitStatus:
     return status
 
 
+def fetch_remote(repo_path: Path) -> bool:
+    """Run git fetch to update remote tracking refs.
+
+    Args:
+        repo_path: Path to the git repository.
+
+    Returns:
+        True if fetch succeeded, False otherwise.
+    """
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(repo_path), "fetch", "--quiet"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return proc.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return False
+
+
+def collect_remote_commits(repo_path: Path) -> list[CommitInfo]:
+    """Get commits on the upstream branch that are not in the local branch.
+
+    Uses git log HEAD..@{upstream} to find commits that exist on the remote
+    but have not been merged/rebased into the local branch.
+
+    Args:
+        repo_path: Path to the git repository.
+
+    Returns:
+        List of CommitInfo for remote-only commits, or empty list if
+        there is no upstream or an error occurs.
+    """
+    log_output = _run_git_command(
+        ["log", "HEAD..@{upstream}", "--format=%h|%cr|%s|%an"],
+        repo_path,
+    )
+    if not log_output.strip():
+        return []
+    return parse_log_output(log_output)
+
+
 # Mapping from FileStatus to (icon, color) for display
 _STATUS_DISPLAY: dict[FileStatus, tuple[str, str]] = {
     FileStatus.STAGED_ADDED: ("A", "green"),
@@ -558,11 +604,52 @@ def build_diff_panel(status: GitStatus) -> Panel:
     return Panel(table, title="Diff Stats", border_style="blue")
 
 
+def build_remote_panel(status: GitStatus) -> Panel:
+    """Build a Rich panel showing remote-ahead commits.
+
+    Args:
+        status: Collected git status data.
+
+    Returns:
+        Panel with commits on the remote not yet in the local branch.
+    """
+    if not status.remote_commits:
+        subtitle = f"fetched {status.last_fetch_time}" if status.last_fetch_time else None
+        return Panel(
+            Text("Up to date", style="dim"),
+            title="Remote Commits",
+            subtitle=subtitle,
+            border_style="magenta",
+        )
+
+    text = Text()
+    for i, commit in enumerate(status.remote_commits):
+        if i > 0:
+            text.append("\n")
+        text.append(commit.short_hash, style="cyan")
+        text.append(" ")
+        text.append(commit.message)
+        text.append(" (", style="dim")
+        text.append(commit.author, style="dim")
+        text.append(", ", style="dim")
+        text.append(commit.relative_time, style="dim")
+        text.append(")", style="dim")
+
+    count = len(status.remote_commits)
+    subtitle_parts: list[str] = [f"{count} commit{'s' if count != 1 else ''}"]
+    if status.last_fetch_time:
+        subtitle_parts.append(f"fetched {status.last_fetch_time}")
+    subtitle = ", ".join(subtitle_parts)
+
+    return Panel(text, title="Remote Commits", subtitle=subtitle, border_style="magenta")
+
+
 def build_display(
     status: GitStatus,
     show_log: bool = True,
     show_diff: bool = True,
     show_status: bool = True,
+    show_remote: bool = False,
 ) -> Group:
     """Compose git status panels into a Rich Group.
 
@@ -571,6 +658,7 @@ def build_display(
         show_log: Whether to include the recent commits panel.
         show_diff: Whether to include the diff stats panel.
         show_status: Whether to include the file status panel.
+        show_remote: Whether to include the remote commits panel.
 
     Returns:
         Group of Rich panels for display.
@@ -579,6 +667,9 @@ def build_display(
 
     if show_status:
         panels.append(build_status_panel(status))
+
+    if show_remote:
+        panels.append(build_remote_panel(status))
 
     if show_log:
         panels.append(build_log_panel(status))
@@ -596,6 +687,8 @@ def run_git_monitor(
     show_log: bool = True,
     show_diff: bool = True,
     show_status: bool = True,
+    fetch_enabled: bool = False,
+    fetch_interval: float = 60.0,
 ) -> None:
     """Run the git monitor with Rich Live.
 
@@ -606,8 +699,11 @@ def run_git_monitor(
         show_log: Whether to show recent commits panel.
         show_diff: Whether to show diff stats panel.
         show_status: Whether to show file status panel.
+        fetch_enabled: Whether to periodically fetch from the remote.
+        fetch_interval: How often to fetch from the remote (seconds).
     """
     import time
+    from datetime import datetime
 
     from rich.console import Console
     from rich.live import Live
@@ -623,27 +719,60 @@ def run_git_monitor(
 
     console.clear()
     console.print(f"[bold cyan]Git Monitor[/] - {effective_path.name}")
-    console.print("[dim]Press Ctrl+C to exit[/]\n")
+    fetch_hint = f" | fetch every {fetch_interval:.0f}s" if fetch_enabled else ""
+    console.print(f"[dim]Press Ctrl+C to exit{fetch_hint}[/]\n")
+
+    last_fetch_time: float = 0.0
+    last_fetch_display: str = ""
+    remote_commits: list[CommitInfo] = []
+
+    def _maybe_fetch() -> None:
+        """Fetch from remote if enough time has elapsed."""
+        nonlocal last_fetch_time, last_fetch_display, remote_commits
+        now = time.monotonic()
+        if now - last_fetch_time >= fetch_interval:
+            if fetch_remote(effective_path):
+                remote_commits = collect_remote_commits(effective_path)
+                last_fetch_display = datetime.now(tz=UTC).astimezone().strftime("%H:%M:%S")
+            last_fetch_time = now
 
     try:
+        # Initial fetch if enabled
+        if fetch_enabled:
+            _maybe_fetch()
+
         status = collect_git_status(effective_path, max_commits)
+        if fetch_enabled:
+            status.remote_commits = remote_commits
+            status.last_fetch_time = last_fetch_display
+
         display = build_display(
             status,
             show_log=show_log,
             show_diff=show_diff,
             show_status=show_status,
+            show_remote=fetch_enabled,
         )
 
         with Live(display, console=console, refresh_per_second=1) as live:
             while True:
                 time.sleep(poll_interval)
+
+                if fetch_enabled:
+                    _maybe_fetch()
+
                 status = collect_git_status(effective_path, max_commits)
+                if fetch_enabled:
+                    status.remote_commits = remote_commits
+                    status.last_fetch_time = last_fetch_display
+
                 live.update(
                     build_display(
                         status,
                         show_log=show_log,
                         show_diff=show_diff,
                         show_status=show_status,
+                        show_remote=fetch_enabled,
                     )
                 )
     except KeyboardInterrupt:

@@ -20,8 +20,11 @@ from cctmux.git_monitor import (
     build_diff_panel,
     build_display,
     build_log_panel,
+    build_remote_panel,
     build_status_panel,
     collect_git_status,
+    collect_remote_commits,
+    fetch_remote,
     parse_diff_stat,
     parse_log_output,
     parse_porcelain_status,
@@ -483,3 +486,119 @@ class TestBuildDisplay:
         status = _make_status()
         display = build_display(status, show_log=False, show_diff=False, show_status=False)
         assert isinstance(display, Group)
+
+    def test_show_remote_flag(self) -> None:
+        commits = [
+            CommitInfo(
+                short_hash="rem1234",
+                relative_time="1 min ago",
+                message="feat: remote change",
+                author="Remote",
+            ),
+        ]
+        status = _make_status(remote_commits=commits, last_fetch_time="12:00:00")
+        display = build_display(status, show_remote=True)
+        assert isinstance(display, Group)
+
+    def test_show_remote_false_by_default(self) -> None:
+        status = _make_status()
+        # Default show_remote=False should not include remote panel
+        display = build_display(status)
+        assert isinstance(display, Group)
+
+
+class TestFetchRemote:
+    """Tests for fetch_remote function."""
+
+    def test_successful_fetch(self, tmp_path: Path) -> None:
+        with patch("cctmux.git_monitor.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            result = fetch_remote(tmp_path)
+            assert result is True
+
+    def test_failed_fetch(self, tmp_path: Path) -> None:
+        with patch("cctmux.git_monitor.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=128, stdout="", stderr="fatal: error")
+            result = fetch_remote(tmp_path)
+            assert result is False
+
+    def test_timeout_returns_false(self, tmp_path: Path) -> None:
+        with patch("cctmux.git_monitor.subprocess.run") as mock_run:
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd="git", timeout=30)
+            result = fetch_remote(tmp_path)
+            assert result is False
+
+    def test_not_found_returns_false(self, tmp_path: Path) -> None:
+        with patch("cctmux.git_monitor.subprocess.run") as mock_run:
+            mock_run.side_effect = FileNotFoundError("git not found")
+            result = fetch_remote(tmp_path)
+            assert result is False
+
+
+class TestCollectRemoteCommits:
+    """Tests for collect_remote_commits function."""
+
+    def test_no_upstream(self, tmp_path: Path) -> None:
+        with patch("cctmux.git_monitor._run_git_command", return_value=""):
+            commits = collect_remote_commits(tmp_path)
+            assert commits == []
+
+    def test_with_remote_commits(self, tmp_path: Path) -> None:
+        log_output = "abc1234|5 min ago|feat: remote change|Alice\ndef5678|10 min ago|fix: remote bug|Bob\n"
+        with patch("cctmux.git_monitor._run_git_command", return_value=log_output):
+            commits = collect_remote_commits(tmp_path)
+            assert len(commits) == 2
+            assert commits[0].short_hash == "abc1234"
+            assert commits[0].message == "feat: remote change"
+            assert commits[1].short_hash == "def5678"
+
+    def test_empty_output(self, tmp_path: Path) -> None:
+        with patch("cctmux.git_monitor._run_git_command", return_value="  \n"):
+            commits = collect_remote_commits(tmp_path)
+            assert commits == []
+
+
+class TestBuildRemotePanel:
+    """Tests for build_remote_panel."""
+
+    def test_empty_remote(self) -> None:
+        status = _make_status(remote_commits=[], last_fetch_time="12:00:00")
+        panel = build_remote_panel(status)
+        assert isinstance(panel, Panel)
+
+    def test_with_remote_commits(self) -> None:
+        commits = [
+            CommitInfo(
+                short_hash="rem1234",
+                relative_time="1 min ago",
+                message="feat: remote change",
+                author="Alice",
+            ),
+            CommitInfo(
+                short_hash="rem5678",
+                relative_time="5 min ago",
+                message="fix: remote fix",
+                author="Bob",
+            ),
+        ]
+        status = _make_status(remote_commits=commits, last_fetch_time="12:00:00")
+        panel = build_remote_panel(status)
+        assert isinstance(panel, Panel)
+
+    def test_no_fetch_time(self) -> None:
+        status = _make_status(remote_commits=[])
+        panel = build_remote_panel(status)
+        assert isinstance(panel, Panel)
+
+    def test_single_commit_subtitle(self) -> None:
+        commits = [
+            CommitInfo(
+                short_hash="rem1234",
+                relative_time="1 min ago",
+                message="feat: one commit",
+                author="Alice",
+            ),
+        ]
+        status = _make_status(remote_commits=commits, last_fetch_time="12:00:00")
+        panel = build_remote_panel(status)
+        assert isinstance(panel, Panel)

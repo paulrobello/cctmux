@@ -412,6 +412,9 @@ cctmux-git [OPTIONS]
 | `--no-log` | | Hide recent commits panel | `false` |
 | `--no-diff` | | Hide diff stats panel | `false` |
 | `--no-status` | | Hide file status panel | `false` |
+| `--fetch` | `-f` | Enable periodic git fetch to check for remote commits | `false` |
+| `--no-fetch` | | Disable periodic git fetch (overrides config/preset) | `false` |
+| `--fetch-interval` | `-F` | How often to fetch from remote (seconds) | `60.0` |
 | `--preset` | | Use preset configuration (minimal, verbose, debug) | `None` |
 | `--version` | | Show version | |
 | `--help` | | Show help | |
@@ -420,9 +423,9 @@ cctmux-git [OPTIONS]
 
 | Preset | Description |
 |--------|-------------|
-| `minimal` | Hide log and diff panels, show only branch and status; max 5 commits |
-| `verbose` | All panels visible; max 20 commits |
-| `debug` | All panels visible; max 30 commits |
+| `minimal` | Hide log and diff panels, show only branch and status; max 5 commits; fetch disabled |
+| `verbose` | All panels visible; max 20 commits; fetch enabled (60s interval) |
+| `debug` | All panels visible; max 30 commits; fetch enabled (30s interval) |
 
 ### Examples
 
@@ -442,6 +445,12 @@ cctmux-git --no-diff
 # Show 20 recent commits
 cctmux-git -m 20
 
+# Enable remote commit checking
+cctmux-git --fetch
+
+# Fetch every 30 seconds
+cctmux-git --fetch -F 30
+
 # Use minimal preset
 cctmux-git --preset minimal
 
@@ -453,6 +462,7 @@ cctmux-git -i 0.5
 
 - **Branch Panel**: Branch name, upstream tracking, ahead/behind counts, stash count, last commit
 - **Files Panel**: Changed files with status indicators (staged, unstaged, untracked, renamed)
+- **Remote Commits Panel**: Commits on the remote not yet in the local branch, with last fetch timestamp (shown when `--fetch` is enabled)
 - **Recent Commits Panel**: Commit hash, message, author, and relative timestamp
 - **Diff Stats Panel**: Per-file insertion/deletion counts with visual bars
 

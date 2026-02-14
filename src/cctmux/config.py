@@ -98,6 +98,8 @@ class GitMonitorConfig(BaseModel):
     show_status: bool = True
     max_commits: int = 10
     poll_interval: float = 2.0
+    fetch_enabled: bool = False
+    fetch_interval: float = 60.0
 
 
 class CustomLayout(BaseModel):
@@ -210,6 +212,7 @@ def get_preset_config(preset: ConfigPreset) -> Config:
                 show_log=False,
                 show_diff=False,
                 max_commits=5,
+                fetch_enabled=False,
             ),
         )
     elif preset == ConfigPreset.VERBOSE:
@@ -255,6 +258,8 @@ def get_preset_config(preset: ConfigPreset) -> Config:
                 show_diff=True,
                 show_status=True,
                 max_commits=20,
+                fetch_enabled=True,
+                fetch_interval=60.0,
             ),
         )
     elif preset == ConfigPreset.DEBUG:
@@ -303,6 +308,8 @@ def get_preset_config(preset: ConfigPreset) -> Config:
                 show_diff=True,
                 show_status=True,
                 max_commits=30,
+                fetch_enabled=True,
+                fetch_interval=30.0,
             ),
         )
     # Default preset

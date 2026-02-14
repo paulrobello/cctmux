@@ -133,6 +133,8 @@ git_monitor:
   show_status: true
   max_commits: 10
   poll_interval: 2.0
+  fetch_enabled: false    # Periodically fetch from remote to check for new commits
+  fetch_interval: 60.0    # How often to fetch (seconds)
 
 # Ralph monitor settings
 ralph_monitor:
@@ -232,6 +234,8 @@ custom_layouts: []
 | `show_status` | boolean | `true` | Show file status panel |
 | `max_commits` | integer | `10` | Maximum recent commits to display |
 | `poll_interval` | float | `2.0` | Polling interval in seconds |
+| `fetch_enabled` | boolean | `false` | Periodically fetch from remote |
+| `fetch_interval` | float | `60.0` | How often to fetch from remote (seconds) |
 
 ### Ralph Monitor (`ralph_monitor`)
 
@@ -298,6 +302,7 @@ Reduces visual noise for focused work:
 **Git Monitor:**
 - Hide log and diff panels
 - Max 5 commits
+- Fetch disabled
 
 **Ralph Monitor:**
 - Hide timeline
@@ -327,6 +332,7 @@ Shows comprehensive information:
 **Git Monitor:**
 - All panels visible
 - Max 20 commits
+- Fetch enabled (60s interval)
 
 **Ralph Monitor:**
 - Show table, timeline, prompt, task progress
@@ -354,6 +360,7 @@ Maximum detail for troubleshooting:
 **Git Monitor:**
 - All panels visible
 - Max 30 commits
+- Fetch enabled (30s interval)
 
 **Ralph Monitor:**
 - Show table, timeline, prompt, task progress

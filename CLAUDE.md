@@ -69,6 +69,16 @@ src/cctmux/
 - Claude subagents: `~/.claude/projects/<encoded-path>/agent-*.jsonl` or `<session-id>/subagents/agent-*.jsonl`
 - Ralph state: `$PROJECT/.claude/ralph-state.json`
 
+## Change Checklist
+
+When adding or modifying tools, CLI options, layouts, or monitors, always update **all** of the following:
+
+1. **Skill file** (`src/cctmux/skill/cc-tmux/SKILL.md`) — the bundled skill that Claude uses at runtime
+2. **CLI Reference** (`docs/CLI_REFERENCE.md`) — options tables, examples, display features
+3. **Configuration Reference** (`docs/CONFIGURATION.md`) — config model fields, preset details, example YAML
+4. **Other relevant docs** (`docs/LAYOUTS.md`, `docs/ARCHITECTURE.md`, etc.) as applicable
+5. **Tests** — parser, builder, and integration tests for any new data model fields or functions
+
 ## Key Patterns
 
 - All tmux operations support `dry_run=True` to return commands without executing

@@ -840,6 +840,12 @@ cctmux-git --no-diff
 # Show 20 recent commits
 cctmux-git -m 20
 
+# Enable periodic remote fetch to check for new remote commits
+cctmux-git --fetch
+
+# Fetch every 30 seconds (default: 60s)
+cctmux-git --fetch -F 30
+
 # Use a preset configuration
 cctmux-git --preset minimal
 cctmux-git --preset verbose
@@ -853,12 +859,17 @@ Run the git monitor alongside your work:
 # Create pane for git monitor, capture its ID
 GIT_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -p 40)
 tmux send-keys -t "$GIT_PANE" "cctmux-git" Enter
+
+# With remote tracking enabled
+GIT_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -p 40)
+tmux send-keys -t "$GIT_PANE" "cctmux-git --fetch" Enter
 ```
 
 ### Display Features
 
 - **Branch Panel**: Branch name, upstream tracking, ahead/behind counts, stash count, last commit
 - **Files Panel**: Changed files with status indicators (staged in green, unstaged in yellow, untracked in dim)
+- **Remote Commits Panel**: Commits on the remote not yet in the local branch, with fetch timestamp (shown when `--fetch` is enabled)
 - **Recent Commits Panel**: Commit hash, message, author, and relative timestamp
 - **Diff Stats Panel**: Per-file insertion/deletion counts with visual bars
 

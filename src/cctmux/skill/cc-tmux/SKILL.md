@@ -1267,7 +1267,12 @@ State is stored at `$PROJECT/.claude/ralph-state.json` and tracks:
 
 ## Configuration
 
-cctmux supports configuration via YAML file at `~/.config/cctmux/config.yaml`.
+cctmux supports layered configuration:
+1. **User config**: `~/.config/cctmux/config.yaml` — base settings
+2. **Project config**: `.cctmux.yaml` in project root — shared team overrides (committed to repo)
+3. **Project local config**: `.cctmux.yaml.local` in project root — personal overrides (gitignored)
+
+Values are deep-merged (last wins). Set `ignore_parent_configs: true` in a project config to skip user config entirely.
 
 ### Configuration File Structure
 

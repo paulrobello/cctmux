@@ -33,7 +33,7 @@ All commands support `--version` and `--help` flags.
 
 ## cctmux
 
-Launch Claude Code inside tmux with session management.
+Launch Claude Code inside tmux with session management. Supports layered configuration from user config, `.cctmux.yaml` (project), and `.cctmux.yaml.local` (personal). See [Configuration](CONFIGURATION.md#project-configuration) for details.
 
 ### Synopsis
 

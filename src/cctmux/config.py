@@ -2,9 +2,10 @@
 
 from enum import StrEnum
 from pathlib import Path
+from typing import cast
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from cctmux.xdg_paths import get_config_file_path
 
@@ -119,6 +120,9 @@ class Config(BaseModel):
     default_claude_args: str | None = None
     task_list_id: bool = False
 
+    # When true in a project config, ignore all parent configs (user config)
+    ignore_parent_configs: bool = False
+
     # Monitor-specific configurations
     session_monitor: SessionMonitorConfig = SessionMonitorConfig()
     task_monitor: TaskMonitorConfig = TaskMonitorConfig()
@@ -131,25 +135,90 @@ class Config(BaseModel):
     custom_layouts: list[CustomLayout] = []
 
 
-def load_config(config_path: Path | None = None) -> Config:
-    """Load configuration from YAML file.
+def _deep_merge(base: dict[str, object], override: dict[str, object]) -> dict[str, object]:
+    """Recursively merge override dict into base dict.
+
+    For nested dicts, merges recursively. For all other types, override wins.
 
     Args:
-        config_path: Optional path to config file. Uses default if None.
+        base: The base dictionary.
+        override: The dictionary with overriding values.
 
     Returns:
-        The loaded configuration, or defaults if file doesn't exist.
+        A new merged dictionary.
     """
-    path = config_path or get_config_file_path()
+    result = dict(base)
+    for key, value in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = _deep_merge(result[key], value)  # type: ignore[arg-type]
+        else:
+            result[key] = value
+    return result
 
+
+def _load_yaml_file(path: Path) -> dict[str, object]:
+    """Load a YAML file and return its contents as a dict.
+
+    Args:
+        path: Path to the YAML file.
+
+    Returns:
+        Parsed dict, or empty dict if file is missing or invalid.
+    """
     if not path.exists():
-        return Config()
-
+        return {}
     try:
         with path.open(encoding="utf-8") as f:
-            data: dict[str, object] = yaml.safe_load(f) or {}
-        return Config.model_validate(data)
-    except (yaml.YAMLError, ValueError):
+            raw = yaml.safe_load(f)
+        if not isinstance(raw, dict):
+            return {}
+        return cast(dict[str, object], raw)
+    except (yaml.YAMLError, OSError):
+        return {}
+
+
+def load_config(config_path: Path | None = None, project_dir: Path | None = None) -> Config:
+    """Load configuration with layered merging.
+
+    Loading order (last value wins via deep merge):
+    1. User config (~/.config/cctmux/config.yaml) - base
+    2. Project config (.cctmux.yaml in project_dir) - team/shared overrides
+    3. Project local config (.cctmux.yaml.local in project_dir) - personal overrides
+
+    If a project config sets ``ignore_parent_configs: true``, the user config is
+    skipped and only project configs are used.
+
+    Args:
+        config_path: Optional path to user config file. Uses default if None.
+        project_dir: Optional project directory containing .cctmux.yaml files.
+
+    Returns:
+        The loaded configuration, or defaults if no valid config found.
+    """
+    user_config = _load_yaml_file(config_path or get_config_file_path())
+
+    if project_dir:
+        project_config = _load_yaml_file(project_dir / ".cctmux.yaml")
+        local_config = _load_yaml_file(project_dir / ".cctmux.yaml.local")
+
+        # Check if any project config wants to ignore parent configs
+        ignore_parent = project_config.get("ignore_parent_configs", False) or local_config.get(
+            "ignore_parent_configs", False
+        )
+
+        if ignore_parent:
+            # Start from defaults, apply only project configs
+            merged: dict[str, object] = _deep_merge(project_config, local_config)
+        else:
+            # Normal layered merge: user → project → local
+            merged = _deep_merge(user_config, project_config)
+            merged = _deep_merge(merged, local_config)
+    else:
+        merged = user_config
+
+    try:
+        return Config.model_validate(merged)
+    except (ValueError, ValidationError):
         return Config()
 
 

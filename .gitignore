@@ -54,3 +54,4 @@ Thumbs.db
 *-mcp.json
 .gemini-clipboard
 claude_scratch/
+.cctmux.yaml.local

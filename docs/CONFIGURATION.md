@@ -6,6 +6,7 @@ Complete reference for cctmux configuration options, presets, and customization.
 
 - [Overview](#overview)
 - [Configuration File](#configuration-file)
+- [Project Configuration](#project-configuration)
 - [Configuration Options](#configuration-options)
 - [Monitor Configurations](#monitor-configurations)
 - [Presets](#presets)
@@ -15,23 +16,29 @@ Complete reference for cctmux configuration options, presets, and customization.
 
 ## Overview
 
-cctmux uses a YAML configuration file for persistent settings. Configuration values can be overridden via CLI flags, with presets providing quick access to common configurations.
+cctmux uses layered YAML configuration files with deep merging for persistent settings. Configuration values can be overridden at the project level and via CLI flags, with presets providing quick access to common configurations.
 
 ```mermaid
 graph LR
     Defaults[Default Values]
-    ConfigFile[Config File]
+    UserConfig[User Config]
+    ProjectConfig[Project Config]
+    LocalConfig[Local Config]
     Presets[Presets]
     CLI[CLI Flags]
     Effective[Effective Config]
 
-    Defaults --> ConfigFile
-    ConfigFile --> Presets
+    Defaults --> UserConfig
+    UserConfig --> ProjectConfig
+    ProjectConfig --> LocalConfig
+    LocalConfig --> Presets
     Presets --> CLI
     CLI --> Effective
 
     style Defaults fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
-    style ConfigFile fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
+    style UserConfig fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
+    style ProjectConfig fill:#006064,stroke:#00acc1,stroke-width:2px,color:#ffffff
+    style LocalConfig fill:#004d40,stroke:#00897b,stroke-width:2px,color:#ffffff
     style Presets fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style CLI fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
     style Effective fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
@@ -40,14 +47,16 @@ graph LR
 **Priority Order** (highest to lowest):
 1. CLI flags
 2. Preset configuration (if `--preset` specified)
-3. Configuration file
-4. Default values
+3. Project local config (`.cctmux.yaml.local`)
+4. Project config (`.cctmux.yaml`)
+5. User configuration file
+6. Default values
 
 ## Configuration File
 
 ### Location
 
-The configuration file is located at:
+The user configuration file is located at:
 
 ```
 ~/.config/cctmux/config.yaml
@@ -86,6 +95,9 @@ default_claude_args: null
 
 # Set CLAUDE_CODE_TASK_LIST_ID environment variable
 task_list_id: false
+
+# Skip user config when set in project config
+ignore_parent_configs: false
 
 # Session monitor settings
 session_monitor:
@@ -148,6 +160,83 @@ ralph_monitor:
 custom_layouts: []
 ```
 
+## Project Configuration
+
+In addition to the user config, cctmux supports per-project configuration files that are deep-merged on top of the user config.
+
+### Project Config Files
+
+| File | Location | Purpose |
+|------|----------|---------|
+| `.cctmux.yaml` | Project root | Shared team settings (commit to repo) |
+| `.cctmux.yaml.local` | Project root | Personal overrides (gitignored) |
+
+### Loading Order
+
+1. **User config** (`~/.config/cctmux/config.yaml`) — base settings
+2. **Project config** (`.cctmux.yaml`) — team/shared overrides
+3. **Project local config** (`.cctmux.yaml.local`) — personal overrides
+
+Last value wins via deep merge. Partial nested objects only override the fields they specify — sibling fields are preserved from parent configs.
+
+### Deep Merge Behavior
+
+When a project config overrides a nested section, only the specified fields change:
+
+```yaml
+# User config (~/.config/cctmux/config.yaml)
+git_monitor:
+  show_log: true
+  show_diff: true
+  max_commits: 10
+  fetch_enabled: false
+
+# Project config (.cctmux.yaml)
+git_monitor:
+  fetch_enabled: true    # Only this field changes
+
+# Effective config
+git_monitor:
+  show_log: true         # Preserved from user config
+  show_diff: true        # Preserved from user config
+  max_commits: 10        # Preserved from user config
+  fetch_enabled: true    # Overridden by project config
+```
+
+### Ignoring Parent Configs
+
+Set `ignore_parent_configs: true` in a project config to skip the user config entirely. Only project configs and defaults are used:
+
+```yaml
+# .cctmux.yaml
+ignore_parent_configs: true
+default_layout: cc-mon
+git_monitor:
+  fetch_enabled: true
+```
+
+This is useful when a project requires a specific, self-contained configuration that should not be affected by individual user settings. The flag can be set in either `.cctmux.yaml` or `.cctmux.yaml.local`.
+
+### Example Project Config
+
+```yaml
+# .cctmux.yaml (committed to repo)
+default_layout: cc-mon
+default_claude_args: "--model sonnet"
+task_list_id: true
+
+git_monitor:
+  fetch_enabled: true
+  fetch_interval: 30.0
+```
+
+```yaml
+# .cctmux.yaml.local (personal, gitignored)
+default_claude_args: "--model opus"
+git_monitor:
+  max_commits: 20
+```
+
 ## Configuration Options
 
 ### Main Configuration
@@ -159,6 +248,7 @@ custom_layouts: []
 | `max_history_entries` | integer | `50` | Max session history entries |
 | `default_claude_args` | string | `null` | Default claude CLI arguments |
 | `task_list_id` | boolean | `false` | Set task list ID env var |
+| `ignore_parent_configs` | boolean | `false` | Skip user config (project configs only) |
 | `custom_layouts` | list | `[]` | Custom layout definitions |
 
 ### Layout Options

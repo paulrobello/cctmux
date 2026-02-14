@@ -147,8 +147,8 @@ def main(
     # Ensure directories exist
     ensure_directories()
 
-    # Load configuration
-    config = load_config(config_path)
+    # Load configuration (use cwd for project-level config discovery)
+    config = load_config(config_path, project_dir=Path.cwd())
 
     # Handle dump-config
     if dump_config:
@@ -641,7 +641,7 @@ def agents_main(
         return
 
     # Resolve inactive timeout: CLI flag > config > default (300s)
-    config = load_config()
+    config = load_config(project_dir=project or Path.cwd())
     effective_timeout = inactive_timeout if inactive_timeout is not None else config.agent_monitor.inactive_timeout
 
     if do_list:
@@ -832,7 +832,7 @@ def git_main(
         effective_max_commits = max_commits
         effective_interval = interval
         # Use config defaults when no preset
-        config = load_config()
+        config = load_config(project_dir=project or Path.cwd())
         effective_fetch_enabled = config.git_monitor.fetch_enabled
         effective_fetch_interval = config.git_monitor.fetch_interval
 

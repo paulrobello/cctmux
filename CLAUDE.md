@@ -30,7 +30,7 @@ uv run cctmux-git         # Real-time git status monitor
 ```
 src/cctmux/
 ├── __main__.py         # Typer CLI: 7 apps (cctmux, cctmux-tasks, cctmux-session, cctmux-agents, cctmux-activity, cctmux-git, cctmux-ralph)
-├── config.py           # Config model (Pydantic), LayoutType StrEnum, YAML load/save
+├── config.py           # Config model (Pydantic), LayoutType StrEnum, YAML load/save, layered project config
 ├── session_history.py  # Session tracking with Pydantic models, stored in XDG data dir
 ├── tmux_manager.py     # Core tmux operations: create/attach sessions, status bar
 ├── task_monitor.py     # Real-time task monitor with ASCII dependency graphs
@@ -62,6 +62,8 @@ src/cctmux/
 
 **Storage Locations**:
 - Config: `~/.config/cctmux/config.yaml`
+- Project config: `$PROJECT/.cctmux.yaml` (shared/committed)
+- Project local config: `$PROJECT/.cctmux.yaml.local` (personal/gitignored)
 - History: `~/.local/share/cctmux/history.yaml`
 - Skill: `~/.claude/skills/cc-tmux/SKILL.md`
 - Claude tasks: `~/.claude/tasks/<session-id>/*.json`
@@ -83,6 +85,8 @@ When adding or modifying tools, CLI options, layouts, or monitors, always update
 
 - All tmux operations support `dry_run=True` to return commands without executing
 - Config and history use Pydantic models with YAML serialization
+- Config supports layered loading: user config → `.cctmux.yaml` → `.cctmux.yaml.local` (deep merge, last wins)
+- Project configs can set `ignore_parent_configs: true` to skip user config entirely
 - CLI args override config defaults (e.g., `--claude-args` overrides `default_claude_args`)
 - Session names are sanitized: lowercase, hyphens only, no special chars
 - Task monitor uses `TaskWindow` dataclass for virtual scrolling of large task lists

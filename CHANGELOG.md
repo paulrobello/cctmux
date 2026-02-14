@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Project-Level Configuration**: Layered config loading from `.cctmux.yaml` (shared/committed) and `.cctmux.yaml.local` (personal/gitignored) in the project directory. Deep merge preserves sibling fields from parent configs. Set `ignore_parent_configs: true` to skip user config entirely.
 - **Git Monitor** (`cctmux-git`): Real-time git repository status monitor with branch info, file status, recent commits, and diff statistics
 - **Git-Mon Layout**: New `git-mon` layout providing Claude (60%) + git status monitor (40%) side-by-side
 - **Git Monitor Configuration**: `git_monitor` section in config with `show_log`, `show_diff`, `show_status`, `max_commits`, and `poll_interval` settings

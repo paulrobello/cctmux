@@ -345,7 +345,15 @@ cctmux-ralph cancel                   # Cancel an active Ralph Loop
 
 ## Configuration
 
-Config file location: `~/.config/cctmux/config.yaml`
+cctmux supports layered configuration with deep merging:
+
+1. **User config** (`~/.config/cctmux/config.yaml`) — base settings
+2. **Project config** (`.cctmux.yaml` in project dir) — shared team overrides (commit to repo)
+3. **Project local config** (`.cctmux.yaml.local` in project dir) — personal overrides (gitignored)
+
+Last value wins. Partial nested overrides (e.g., only `git_monitor.fetch_enabled`) don't wipe sibling fields. Set `ignore_parent_configs: true` in a project config to skip user config entirely.
+
+User config file location: `~/.config/cctmux/config.yaml`
 
 ```yaml
 # Main settings

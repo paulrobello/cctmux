@@ -333,7 +333,7 @@ cctmux -l dashboard
 
 ## Par Mode
 
-Par mode sets up a triple layout with the session monitor in pane 2 and task monitor in pane 3. It checks the current layout and only reconfigures if needed.
+Par mode sets up a triple layout with the task monitor in pane 2 and git monitor in pane 3. It checks the current layout and only reconfigures if needed.
 
 ### Activating Par Mode
 
@@ -354,11 +354,11 @@ W=$(tmux list-panes -t "$CCTMUX_SESSION" -F "#{window_index}" | head -1)
 PANE_INFO=$(tmux list-panes -t "$CCTMUX_SESSION" -F "#{pane_id}:#{pane_current_command}")
 PANE_COUNT=$(echo "$PANE_INFO" | wc -l | tr -d ' ')
 
-# Check if already in par-mode (3 panes with session monitor and task monitor)
-HAS_SESSION_MON=$(echo "$PANE_INFO" | grep -c "cctmux-session" || true)
+# Check if already in par-mode (3 panes with task monitor and git monitor)
 HAS_TASK_MON=$(echo "$PANE_INFO" | grep -c "cctmux-tasks" || true)
+HAS_GIT_MON=$(echo "$PANE_INFO" | grep -c "cctmux-git" || true)
 
-if [ "$PANE_COUNT" -eq 3 ] && [ "$HAS_SESSION_MON" -ge 1 ] && [ "$HAS_TASK_MON" -ge 1 ]; then
+if [ "$PANE_COUNT" -eq 3 ] && [ "$HAS_TASK_MON" -ge 1 ] && [ "$HAS_GIT_MON" -ge 1 ]; then
     echo "Par mode already active"
     exit 0
 fi
@@ -377,11 +377,11 @@ if [ "$PANE_COUNT" -eq 3 ]; then
     # Stop any running processes in side panes, then launch monitors
     tmux send-keys -t "$SIDE1" C-c
     sleep 0.3
-    tmux send-keys -t "$SIDE1" "cctmux-session" Enter
+    tmux send-keys -t "$SIDE1" "cctmux-tasks -g" Enter
 
     tmux send-keys -t "$SIDE2" C-c
     sleep 0.3
-    tmux send-keys -t "$SIDE2" "cctmux-tasks -g" Enter
+    tmux send-keys -t "$SIDE2" "cctmux-git" Enter
 
     echo "Par mode activated (reused existing panes)"
     exit 0
@@ -396,14 +396,14 @@ fi
 # Split horizontally with 50% on the right, capture pane ID
 RIGHT_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -p 50)
 
-# Launch session monitor in the right pane
-tmux send-keys -t "$RIGHT_PANE" "cctmux-session" Enter
+# Launch task monitor in the right pane
+tmux send-keys -t "$RIGHT_PANE" "cctmux-tasks -g" Enter
 
 # Split right pane vertically 50/50, capture bottom pane ID
 BOTTOM_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$RIGHT_PANE" -v -p 50)
 
-# Launch task monitor in the bottom-right pane
-tmux send-keys -t "$BOTTOM_PANE" "cctmux-tasks -g" Enter
+# Launch git monitor in the bottom-right pane
+tmux send-keys -t "$BOTTOM_PANE" "cctmux-git" Enter
 
 echo "Par mode activated"
 ```
@@ -412,10 +412,10 @@ echo "Par mode activated"
 
 ```
 ---------------------------------
-|            | cctmux-session   |
-|  CLAUDE    |      50%         |
-|   70%      |------------------|
 |            | cctmux-tasks     |
+|  CLAUDE    |      50%         |
+|   50%      |------------------|
+|            | cctmux-git       |
 |            |      50%         |
 ---------------------------------
 ```

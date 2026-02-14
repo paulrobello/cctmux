@@ -1,43 +1,43 @@
 """Predefined tmux layouts for cctmux."""
 
 import subprocess
+from collections.abc import Callable
 
 from cctmux.config import LayoutType
 
+# Type alias for layout handler functions
+LayoutHandler = Callable[[str, bool], list[str]]
 
-def apply_layout(session_name: str, layout: LayoutType, dry_run: bool = False) -> list[str]:
-    """Apply a layout to a tmux session.
+# Timeout for all tmux subprocess calls (seconds)
+_TMUX_TIMEOUT = 10
+
+
+def _run_tmux(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+    """Run a tmux subprocess command with standard timeout.
 
     Args:
-        session_name: The session name.
-        layout: The layout type to apply.
-        dry_run: If True, return commands without executing.
+        cmd: Command to execute.
+        **kwargs: Additional arguments for subprocess.run.
 
     Returns:
-        List of commands that were (or would be) executed.
+        CompletedProcess result.
     """
-    if layout == LayoutType.DEFAULT:
-        return apply_default_layout(session_name, dry_run)
-    elif layout == LayoutType.EDITOR:
-        return apply_editor_layout(session_name, dry_run)
-    elif layout == LayoutType.MONITOR:
-        return apply_monitor_layout(session_name, dry_run)
-    elif layout == LayoutType.TRIPLE:
-        return apply_triple_layout(session_name, dry_run)
-    elif layout == LayoutType.CC_MON:
-        return apply_cc_mon_layout(session_name, dry_run)
-    elif layout == LayoutType.FULL_MONITOR:
-        return apply_full_monitor_layout(session_name, dry_run)
-    elif layout == LayoutType.DASHBOARD:
-        return apply_dashboard_layout(session_name, dry_run)
-    elif layout == LayoutType.RALPH:
-        return apply_ralph_layout(session_name, dry_run)
-    elif layout == LayoutType.RALPH_FULL:
-        return apply_ralph_full_layout(session_name, dry_run)
-    elif layout == LayoutType.GIT_MON:
-        return apply_git_mon_layout(session_name, dry_run)
-    else:
-        return []
+    return subprocess.run(cmd, check=True, timeout=_TMUX_TIMEOUT, **kwargs)  # type: ignore[arg-type]
+
+
+def _validate_pane_id(pane_id: str, context: str = "") -> None:
+    """Validate that a captured pane ID looks correct.
+
+    Args:
+        pane_id: The pane ID string (should start with %).
+        context: Description for error messages.
+
+    Raises:
+        ValueError: If pane ID is empty or malformed.
+    """
+    if not pane_id or not pane_id.startswith("%"):
+        label = f" ({context})" if context else ""
+        raise ValueError(f"Invalid pane ID{label}: {pane_id!r}")
 
 
 def apply_default_layout(session_name: str, dry_run: bool = False) -> list[str]:
@@ -73,7 +73,7 @@ def apply_editor_layout(session_name: str, dry_run: bool = False) -> list[str]:
     split_cmd = ["tmux", "split-window", "-d", "-t", session_name, "-h", "-p", "30"]
     commands.append(" ".join(split_cmd))
     if not dry_run:
-        subprocess.run(split_cmd, check=True)
+        _run_tmux(split_cmd)
 
     return commands
 
@@ -95,7 +95,7 @@ def apply_monitor_layout(session_name: str, dry_run: bool = False) -> list[str]:
     split_cmd = ["tmux", "split-window", "-d", "-t", session_name, "-v", "-p", "20"]
     commands.append(" ".join(split_cmd))
     if not dry_run:
-        subprocess.run(split_cmd, check=True)
+        _run_tmux(split_cmd)
 
     return commands
 
@@ -126,8 +126,9 @@ def apply_triple_layout(session_name: str, dry_run: bool = False) -> list[str]:
 
     right_pane_id = ""
     if not dry_run:
-        result = subprocess.run(split_h_cmd, check=True, capture_output=True, text=True)
+        result = _run_tmux(split_h_cmd, capture_output=True, text=True)
         right_pane_id = result.stdout.strip()
+        _validate_pane_id(right_pane_id, "right pane")
 
     # Split the right pane vertically (50/50) using the captured pane ID
     # Use -d to keep focus on main pane
@@ -137,7 +138,7 @@ def apply_triple_layout(session_name: str, dry_run: bool = False) -> list[str]:
         split_v_cmd = ["tmux", "split-window", "-d", "-t", right_pane_id, "-v", "-p", "50"]
     commands.append(" ".join(split_v_cmd))
     if not dry_run:
-        subprocess.run(split_v_cmd, check=True)
+        _run_tmux(split_v_cmd)
 
     return commands
 
@@ -167,8 +168,9 @@ def apply_cc_mon_layout(session_name: str, dry_run: bool = False) -> list[str]:
     main_pane_id = ""
     if not dry_run:
         get_pane_cmd = ["tmux", "display-message", "-p", "-t", session_name, "#{pane_id}"]
-        result = subprocess.run(get_pane_cmd, check=True, capture_output=True, text=True)
+        result = _run_tmux(get_pane_cmd, capture_output=True, text=True)
         main_pane_id = result.stdout.strip()
+        _validate_pane_id(main_pane_id, "main pane")
 
     # Split horizontally with 50% on the right, using -P to get the new pane ID
     # Use -d to keep focus on original pane during split
@@ -177,8 +179,9 @@ def apply_cc_mon_layout(session_name: str, dry_run: bool = False) -> list[str]:
 
     right_pane_id = ""
     if not dry_run:
-        result = subprocess.run(split_h_cmd, check=True, capture_output=True, text=True)
+        result = _run_tmux(split_h_cmd, capture_output=True, text=True)
         right_pane_id = result.stdout.strip()
+        _validate_pane_id(right_pane_id, "right pane")
 
     # Launch cctmux-session in the right pane
     if dry_run:
@@ -187,7 +190,7 @@ def apply_cc_mon_layout(session_name: str, dry_run: bool = False) -> list[str]:
         session_cmd = ["tmux", "send-keys", "-t", right_pane_id, "cctmux-session", "Enter"]
     commands.append(" ".join(session_cmd))
     if not dry_run:
-        subprocess.run(session_cmd, check=True)
+        _run_tmux(session_cmd)
 
     # Split the right pane vertically (50/50), using -P to get the new pane ID
     # Use -d to keep focus on main pane
@@ -211,8 +214,9 @@ def apply_cc_mon_layout(session_name: str, dry_run: bool = False) -> list[str]:
 
     bottom_right_pane_id = ""
     if not dry_run:
-        result = subprocess.run(split_v_cmd, check=True, capture_output=True, text=True)
+        result = _run_tmux(split_v_cmd, capture_output=True, text=True)
         bottom_right_pane_id = result.stdout.strip()
+        _validate_pane_id(bottom_right_pane_id, "bottom-right pane")
 
     # Launch cctmux-tasks -g in the bottom-right pane
     if dry_run:
@@ -221,7 +225,7 @@ def apply_cc_mon_layout(session_name: str, dry_run: bool = False) -> list[str]:
         tasks_cmd = ["tmux", "send-keys", "-t", bottom_right_pane_id, "cctmux-tasks -g", "Enter"]
     commands.append(" ".join(tasks_cmd))
     if not dry_run:
-        subprocess.run(tasks_cmd, check=True)
+        _run_tmux(tasks_cmd)
 
     # Focus the left (main) pane where Claude runs using captured pane ID
     if dry_run:
@@ -230,7 +234,7 @@ def apply_cc_mon_layout(session_name: str, dry_run: bool = False) -> list[str]:
         focus_cmd = ["tmux", "select-pane", "-t", main_pane_id]
     commands.append(" ".join(focus_cmd))
     if not dry_run:
-        subprocess.run(focus_cmd, check=True)
+        _run_tmux(focus_cmd)
 
     return commands
 
@@ -260,8 +264,9 @@ def apply_full_monitor_layout(session_name: str, dry_run: bool = False) -> list[
     main_pane_id = ""
     if not dry_run:
         get_pane_cmd = ["tmux", "display-message", "-p", "-t", session_name, "#{pane_id}"]
-        result = subprocess.run(get_pane_cmd, check=True, capture_output=True, text=True)
+        result = _run_tmux(get_pane_cmd, capture_output=True, text=True)
         main_pane_id = result.stdout.strip()
+        _validate_pane_id(main_pane_id, "main pane")
 
     # Split horizontally with 40% on the right, using -P to get the new pane ID
     # Use -d to keep focus on original pane during split
@@ -270,8 +275,9 @@ def apply_full_monitor_layout(session_name: str, dry_run: bool = False) -> list[
 
     right_pane_id = ""
     if not dry_run:
-        result = subprocess.run(split_h_cmd, check=True, capture_output=True, text=True)
+        result = _run_tmux(split_h_cmd, capture_output=True, text=True)
         right_pane_id = result.stdout.strip()
+        _validate_pane_id(right_pane_id, "right pane")
 
     # Launch cctmux-session in the top-right pane
     if dry_run:
@@ -280,7 +286,7 @@ def apply_full_monitor_layout(session_name: str, dry_run: bool = False) -> list[
         session_cmd = ["tmux", "send-keys", "-t", right_pane_id, "cctmux-session", "Enter"]
     commands.append(" ".join(session_cmd))
     if not dry_run:
-        subprocess.run(session_cmd, check=True)
+        _run_tmux(session_cmd)
 
     # Split the right pane vertically (65/35 for tasks+activity vs session)
     # Use -d to keep focus on main pane
@@ -304,8 +310,9 @@ def apply_full_monitor_layout(session_name: str, dry_run: bool = False) -> list[
 
     middle_pane_id = ""
     if not dry_run:
-        result = subprocess.run(split_v_cmd, check=True, capture_output=True, text=True)
+        result = _run_tmux(split_v_cmd, capture_output=True, text=True)
         middle_pane_id = result.stdout.strip()
+        _validate_pane_id(middle_pane_id, "middle pane")
 
     # Launch cctmux-tasks -g in the middle-right pane
     if dry_run:
@@ -314,7 +321,7 @@ def apply_full_monitor_layout(session_name: str, dry_run: bool = False) -> list[
         tasks_cmd = ["tmux", "send-keys", "-t", middle_pane_id, "cctmux-tasks -g", "Enter"]
     commands.append(" ".join(tasks_cmd))
     if not dry_run:
-        subprocess.run(tasks_cmd, check=True)
+        _run_tmux(tasks_cmd)
 
     # Split the middle pane vertically (50/50 for tasks/activity)
     # Use -d to keep focus on main pane
@@ -338,8 +345,9 @@ def apply_full_monitor_layout(session_name: str, dry_run: bool = False) -> list[
 
     bottom_pane_id = ""
     if not dry_run:
-        result = subprocess.run(split_v2_cmd, check=True, capture_output=True, text=True)
+        result = _run_tmux(split_v2_cmd, capture_output=True, text=True)
         bottom_pane_id = result.stdout.strip()
+        _validate_pane_id(bottom_pane_id, "bottom pane")
 
     # Launch cctmux-activity in the bottom-right pane
     if dry_run:
@@ -348,7 +356,7 @@ def apply_full_monitor_layout(session_name: str, dry_run: bool = False) -> list[
         activity_cmd = ["tmux", "send-keys", "-t", bottom_pane_id, "cctmux-activity", "Enter"]
     commands.append(" ".join(activity_cmd))
     if not dry_run:
-        subprocess.run(activity_cmd, check=True)
+        _run_tmux(activity_cmd)
 
     # Focus the left (main) pane where Claude runs using captured pane ID
     if dry_run:
@@ -357,7 +365,7 @@ def apply_full_monitor_layout(session_name: str, dry_run: bool = False) -> list[
         focus_cmd = ["tmux", "select-pane", "-t", main_pane_id]
     commands.append(" ".join(focus_cmd))
     if not dry_run:
-        subprocess.run(focus_cmd, check=True)
+        _run_tmux(focus_cmd)
 
     return commands
 
@@ -387,8 +395,9 @@ def apply_dashboard_layout(session_name: str, dry_run: bool = False) -> list[str
     main_pane_id = ""
     if not dry_run:
         get_pane_cmd = ["tmux", "display-message", "-p", "-t", session_name, "#{pane_id}"]
-        result = subprocess.run(get_pane_cmd, check=True, capture_output=True, text=True)
+        result = _run_tmux(get_pane_cmd, capture_output=True, text=True)
         main_pane_id = result.stdout.strip()
+        _validate_pane_id(main_pane_id, "main pane")
 
     # First, move Claude to a side pane - split with 30% on right
     # Use -d to keep focus on original pane during split
@@ -397,8 +406,9 @@ def apply_dashboard_layout(session_name: str, dry_run: bool = False) -> list[str
 
     right_pane_id = ""
     if not dry_run:
-        result = subprocess.run(split_h_cmd, check=True, capture_output=True, text=True)
+        result = _run_tmux(split_h_cmd, capture_output=True, text=True)
         right_pane_id = result.stdout.strip()
+        _validate_pane_id(right_pane_id, "right pane")
 
     # Launch cctmux-session in the top-right pane
     if dry_run:
@@ -407,7 +417,7 @@ def apply_dashboard_layout(session_name: str, dry_run: bool = False) -> list[str
         session_cmd = ["tmux", "send-keys", "-t", right_pane_id, "cctmux-session", "Enter"]
     commands.append(" ".join(session_cmd))
     if not dry_run:
-        subprocess.run(session_cmd, check=True)
+        _run_tmux(session_cmd)
 
     # Split the right pane vertically (50/50 for session/mini-claude)
     # Use -d to keep focus on main pane during split
@@ -431,8 +441,9 @@ def apply_dashboard_layout(session_name: str, dry_run: bool = False) -> list[str
 
     bottom_right_pane_id = ""
     if not dry_run:
-        result = subprocess.run(split_v_cmd, check=True, capture_output=True, text=True)
+        result = _run_tmux(split_v_cmd, capture_output=True, text=True)
         bottom_right_pane_id = result.stdout.strip()
+        _validate_pane_id(bottom_right_pane_id, "bottom-right pane")
 
     # Launch cctmux-activity in the main (left) pane using captured pane ID
     if dry_run:
@@ -441,7 +452,7 @@ def apply_dashboard_layout(session_name: str, dry_run: bool = False) -> list[str
         activity_cmd = ["tmux", "send-keys", "-t", main_pane_id, "cctmux-activity --show-hourly", "Enter"]
     commands.append(" ".join(activity_cmd))
     if not dry_run:
-        subprocess.run(activity_cmd, check=True)
+        _run_tmux(activity_cmd)
 
     # Focus the bottom-right pane (mini claude area) using captured pane ID
     if dry_run:
@@ -450,7 +461,7 @@ def apply_dashboard_layout(session_name: str, dry_run: bool = False) -> list[str
         focus_cmd = ["tmux", "select-pane", "-t", bottom_right_pane_id]
     commands.append(" ".join(focus_cmd))
     if not dry_run:
-        subprocess.run(focus_cmd, check=True)
+        _run_tmux(focus_cmd)
 
     return commands
 
@@ -482,8 +493,9 @@ def apply_ralph_layout(session_name: str, dry_run: bool = False) -> list[str]:
     main_pane_id = ""
     if not dry_run:
         get_pane_cmd = ["tmux", "display-message", "-p", "-t", session_name, "#{pane_id}"]
-        result = subprocess.run(get_pane_cmd, check=True, capture_output=True, text=True)
+        result = _run_tmux(get_pane_cmd, capture_output=True, text=True)
         main_pane_id = result.stdout.strip()
+        _validate_pane_id(main_pane_id, "main pane")
 
     # Split horizontally with 40% on the right
     split_h_cmd = ["tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", session_name, "-h", "-p", "40"]
@@ -491,8 +503,9 @@ def apply_ralph_layout(session_name: str, dry_run: bool = False) -> list[str]:
 
     right_pane_id = ""
     if not dry_run:
-        result = subprocess.run(split_h_cmd, check=True, capture_output=True, text=True)
+        result = _run_tmux(split_h_cmd, capture_output=True, text=True)
         right_pane_id = result.stdout.strip()
+        _validate_pane_id(right_pane_id, "right pane")
 
     # Launch cctmux-ralph (monitor) in the right pane
     if dry_run:
@@ -501,7 +514,7 @@ def apply_ralph_layout(session_name: str, dry_run: bool = False) -> list[str]:
         ralph_cmd = ["tmux", "send-keys", "-t", right_pane_id, "cctmux-ralph", "Enter"]
     commands.append(" ".join(ralph_cmd))
     if not dry_run:
-        subprocess.run(ralph_cmd, check=True)
+        _run_tmux(ralph_cmd)
 
     # Focus the left (main) pane
     if dry_run:
@@ -510,7 +523,7 @@ def apply_ralph_layout(session_name: str, dry_run: bool = False) -> list[str]:
         focus_cmd = ["tmux", "select-pane", "-t", main_pane_id]
     commands.append(" ".join(focus_cmd))
     if not dry_run:
-        subprocess.run(focus_cmd, check=True)
+        _run_tmux(focus_cmd)
 
     return commands
 
@@ -544,8 +557,9 @@ def apply_ralph_full_layout(session_name: str, dry_run: bool = False) -> list[st
     main_pane_id = ""
     if not dry_run:
         get_pane_cmd = ["tmux", "display-message", "-p", "-t", session_name, "#{pane_id}"]
-        result = subprocess.run(get_pane_cmd, check=True, capture_output=True, text=True)
+        result = _run_tmux(get_pane_cmd, capture_output=True, text=True)
         main_pane_id = result.stdout.strip()
+        _validate_pane_id(main_pane_id, "main pane")
 
     # Split horizontally with 40% on the right
     split_h_cmd = ["tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", session_name, "-h", "-p", "40"]
@@ -553,8 +567,9 @@ def apply_ralph_full_layout(session_name: str, dry_run: bool = False) -> list[st
 
     right_pane_id = ""
     if not dry_run:
-        result = subprocess.run(split_h_cmd, check=True, capture_output=True, text=True)
+        result = _run_tmux(split_h_cmd, capture_output=True, text=True)
         right_pane_id = result.stdout.strip()
+        _validate_pane_id(right_pane_id, "right pane")
 
     # Launch cctmux-ralph (monitor) in the right pane
     if dry_run:
@@ -563,7 +578,7 @@ def apply_ralph_full_layout(session_name: str, dry_run: bool = False) -> list[st
         ralph_cmd = ["tmux", "send-keys", "-t", right_pane_id, "cctmux-ralph", "Enter"]
     commands.append(" ".join(ralph_cmd))
     if not dry_run:
-        subprocess.run(ralph_cmd, check=True)
+        _run_tmux(ralph_cmd)
 
     # Split the right pane vertically (50/50)
     if dry_run:
@@ -586,8 +601,9 @@ def apply_ralph_full_layout(session_name: str, dry_run: bool = False) -> list[st
 
     bottom_right_pane_id = ""
     if not dry_run:
-        result = subprocess.run(split_v_cmd, check=True, capture_output=True, text=True)
+        result = _run_tmux(split_v_cmd, capture_output=True, text=True)
         bottom_right_pane_id = result.stdout.strip()
+        _validate_pane_id(bottom_right_pane_id, "bottom-right pane")
 
     # Launch cctmux-tasks in the bottom-right pane
     if dry_run:
@@ -596,7 +612,7 @@ def apply_ralph_full_layout(session_name: str, dry_run: bool = False) -> list[st
         tasks_cmd = ["tmux", "send-keys", "-t", bottom_right_pane_id, "cctmux-tasks -g", "Enter"]
     commands.append(" ".join(tasks_cmd))
     if not dry_run:
-        subprocess.run(tasks_cmd, check=True)
+        _run_tmux(tasks_cmd)
 
     # Focus the left (main) pane
     if dry_run:
@@ -605,7 +621,7 @@ def apply_ralph_full_layout(session_name: str, dry_run: bool = False) -> list[st
         focus_cmd = ["tmux", "select-pane", "-t", main_pane_id]
     commands.append(" ".join(focus_cmd))
     if not dry_run:
-        subprocess.run(focus_cmd, check=True)
+        _run_tmux(focus_cmd)
 
     return commands
 
@@ -634,8 +650,9 @@ def apply_git_mon_layout(session_name: str, dry_run: bool = False) -> list[str]:
     main_pane_id = ""
     if not dry_run:
         get_pane_cmd = ["tmux", "display-message", "-p", "-t", session_name, "#{pane_id}"]
-        result = subprocess.run(get_pane_cmd, check=True, capture_output=True, text=True)
+        result = _run_tmux(get_pane_cmd, capture_output=True, text=True)
         main_pane_id = result.stdout.strip()
+        _validate_pane_id(main_pane_id, "main pane")
 
     # Split horizontally with 40% on the right
     split_h_cmd = ["tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", session_name, "-h", "-p", "40"]
@@ -643,8 +660,9 @@ def apply_git_mon_layout(session_name: str, dry_run: bool = False) -> list[str]:
 
     right_pane_id = ""
     if not dry_run:
-        result = subprocess.run(split_h_cmd, check=True, capture_output=True, text=True)
+        result = _run_tmux(split_h_cmd, capture_output=True, text=True)
         right_pane_id = result.stdout.strip()
+        _validate_pane_id(right_pane_id, "right pane")
 
     # Launch cctmux-git in the right pane
     if dry_run:
@@ -653,7 +671,7 @@ def apply_git_mon_layout(session_name: str, dry_run: bool = False) -> list[str]:
         git_cmd = ["tmux", "send-keys", "-t", right_pane_id, "cctmux-git", "Enter"]
     commands.append(" ".join(git_cmd))
     if not dry_run:
-        subprocess.run(git_cmd, check=True)
+        _run_tmux(git_cmd)
 
     # Focus the left (main) pane
     if dry_run:
@@ -662,6 +680,38 @@ def apply_git_mon_layout(session_name: str, dry_run: bool = False) -> list[str]:
         focus_cmd = ["tmux", "select-pane", "-t", main_pane_id]
     commands.append(" ".join(focus_cmd))
     if not dry_run:
-        subprocess.run(focus_cmd, check=True)
+        _run_tmux(focus_cmd)
 
     return commands
+
+
+# Dictionary dispatch for layout handlers
+_LAYOUT_HANDLERS: dict[LayoutType, LayoutHandler] = {
+    LayoutType.DEFAULT: apply_default_layout,
+    LayoutType.EDITOR: apply_editor_layout,
+    LayoutType.MONITOR: apply_monitor_layout,
+    LayoutType.TRIPLE: apply_triple_layout,
+    LayoutType.CC_MON: apply_cc_mon_layout,
+    LayoutType.FULL_MONITOR: apply_full_monitor_layout,
+    LayoutType.DASHBOARD: apply_dashboard_layout,
+    LayoutType.RALPH: apply_ralph_layout,
+    LayoutType.RALPH_FULL: apply_ralph_full_layout,
+    LayoutType.GIT_MON: apply_git_mon_layout,
+}
+
+
+def apply_layout(session_name: str, layout: LayoutType, dry_run: bool = False) -> list[str]:
+    """Apply a layout to a tmux session.
+
+    Args:
+        session_name: The session name.
+        layout: The layout type to apply.
+        dry_run: If True, return commands without executing.
+
+    Returns:
+        List of commands that were (or would be) executed.
+    """
+    handler = _LAYOUT_HANDLERS.get(layout)
+    if handler is None:
+        return []
+    return handler(session_name, dry_run)

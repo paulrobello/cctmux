@@ -1,7 +1,10 @@
 """Tests for cctmux.layouts module."""
 
+import pytest
+
 from cctmux.config import LayoutType
 from cctmux.layouts import (
+    _validate_pane_id,
     apply_cc_mon_layout,
     apply_dashboard_layout,
     apply_default_layout,
@@ -260,3 +263,33 @@ class TestApplyGitMonLayout:
         assert "send-keys" in commands[1]
         # 3: focus main (left) pane
         assert commands[2] == "tmux select-pane -t test-session:0.0"
+
+
+class TestValidatePaneId:
+    """Tests for _validate_pane_id helper."""
+
+    def test_valid_pane_id(self) -> None:
+        """Should accept valid pane IDs starting with %."""
+        _validate_pane_id("%0")
+        _validate_pane_id("%15")
+        _validate_pane_id("%123")
+
+    def test_empty_string_raises(self) -> None:
+        """Should raise ValueError for empty string."""
+        with pytest.raises(ValueError, match="Invalid pane ID"):
+            _validate_pane_id("")
+
+    def test_no_percent_prefix_raises(self) -> None:
+        """Should raise ValueError for ID without % prefix."""
+        with pytest.raises(ValueError, match="Invalid pane ID"):
+            _validate_pane_id("15")
+
+    def test_positional_index_raises(self) -> None:
+        """Should raise ValueError for positional indices."""
+        with pytest.raises(ValueError, match="Invalid pane ID"):
+            _validate_pane_id("0.1")
+
+    def test_context_in_error_message(self) -> None:
+        """Should include context label in error message."""
+        with pytest.raises(ValueError, match="main_pane"):
+            _validate_pane_id("", context="main_pane")

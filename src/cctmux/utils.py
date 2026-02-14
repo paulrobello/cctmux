@@ -96,7 +96,7 @@ def compress_path(path: str, max_len: int = DEFAULT_PATH_MAX_LEN) -> str:
 
     # Replace home directory with ~
     home = str(Path.home())
-    if path.startswith(home):
+    if path == home or path.startswith(home + "/"):
         path = "~" + path[len(home) :]
 
     # If short enough, return as-is

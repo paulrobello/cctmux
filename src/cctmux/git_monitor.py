@@ -78,6 +78,7 @@ class GitStatus:
     last_commit_author: str = ""
     last_commit_time: str = ""
     remote_commits: list[CommitInfo] = field(default_factory=list[CommitInfo])
+    commit_oid: str = ""
     last_fetch_time: str = ""
 
 
@@ -112,6 +113,9 @@ def parse_porcelain_status(output: str) -> GitStatus:
 
         if line.startswith("# branch.head "):
             status.branch = line[len("# branch.head ") :]
+
+        elif line.startswith("# branch.oid "):
+            status.commit_oid = line[len("# branch.oid ") :]
 
         elif line.startswith("# branch.upstream "):
             status.upstream = line[len("# branch.upstream ") :]
@@ -428,7 +432,12 @@ def build_branch_panel(status: GitStatus) -> Panel:
     text = Text()
 
     # Branch name
-    text.append(status.branch or "(detached)", style="bold cyan")
+    if status.branch and status.branch != "(detached)":
+        text.append(status.branch, style="bold cyan")
+    elif status.commit_oid:
+        text.append(f"(detached @ {status.commit_oid[:8]})", style="bold cyan")
+    else:
+        text.append("(detached)", style="bold cyan")
 
     # Upstream with ahead/behind
     if status.upstream:

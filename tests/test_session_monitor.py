@@ -11,6 +11,7 @@ import pytest
 from cctmux.session_monitor import (
     DisplayConfig,
     EventType,
+    IncrementalEventReader,
     SessionEvent,
     SessionStats,
     _extract_tool_input_summary,
@@ -1386,3 +1387,102 @@ class TestSessionStatsAvgTurnEmpty:
         """Stop reasons display should be empty string when no data."""
         stats = SessionStats()
         assert stats.stop_reasons_display == ""
+
+
+class TestIncrementalEventReader:
+    """Tests for IncrementalEventReader."""
+
+    def _make_user_line(self, text: str) -> str:
+        """Helper to create a user JSONL line."""
+        return json.dumps({"type": "user", "message": {"content": text}})
+
+    def _make_assistant_line(self, text: str) -> str:
+        """Helper to create an assistant JSONL line."""
+        return json.dumps(
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [{"type": "text", "text": text}],
+                    "model": "test",
+                    "usage": {},
+                },
+            }
+        )
+
+    def test_reads_initial_events(self, tmp_path: Path) -> None:
+        """Should read all events on first call."""
+        jsonl_file = tmp_path / "session.jsonl"
+        lines = [self._make_user_line("Hello"), self._make_assistant_line("Hi")]
+        jsonl_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        config = DisplayConfig()
+        reader = IncrementalEventReader(config)
+        events = reader.read(jsonl_file)
+
+        assert len(events) == 2
+
+    def test_incremental_reads_only_new(self, tmp_path: Path) -> None:
+        """Should only parse new bytes on subsequent reads."""
+        jsonl_file = tmp_path / "session.jsonl"
+        jsonl_file.write_text(self._make_user_line("First") + "\n", encoding="utf-8")
+
+        config = DisplayConfig()
+        reader = IncrementalEventReader(config)
+        events = reader.read(jsonl_file)
+        assert len(events) == 1
+
+        # Append a new line
+        with jsonl_file.open("a", encoding="utf-8") as f:
+            f.write(self._make_assistant_line("Second") + "\n")
+
+        events = reader.read()
+        assert len(events) == 2
+
+    def test_reset_on_file_shrink(self, tmp_path: Path) -> None:
+        """Should re-read from scratch if file shrinks."""
+        jsonl_file = tmp_path / "session.jsonl"
+        lines = [self._make_user_line(f"Msg {i}") for i in range(5)]
+        jsonl_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        config = DisplayConfig()
+        reader = IncrementalEventReader(config)
+        events = reader.read(jsonl_file)
+        assert len(events) == 5
+
+        # Truncate file to fewer lines
+        jsonl_file.write_text(self._make_user_line("New") + "\n", encoding="utf-8")
+        events = reader.read()
+        assert len(events) == 1
+
+    def test_reset_on_path_change(self, tmp_path: Path) -> None:
+        """Should reset when a different path is provided."""
+        file_a = tmp_path / "a.jsonl"
+        file_b = tmp_path / "b.jsonl"
+        file_a.write_text(self._make_user_line("A1") + "\n", encoding="utf-8")
+        file_b.write_text(self._make_user_line("B1") + "\n" + self._make_user_line("B2") + "\n", encoding="utf-8")
+
+        config = DisplayConfig()
+        reader = IncrementalEventReader(config)
+        events = reader.read(file_a)
+        assert len(events) == 1
+
+        events = reader.read(file_b)
+        assert len(events) == 2
+
+    def test_nonexistent_file_returns_empty(self, tmp_path: Path) -> None:
+        """Should return empty list for nonexistent file."""
+        config = DisplayConfig()
+        reader = IncrementalEventReader(config)
+        events = reader.read(tmp_path / "nope.jsonl")
+        assert events == []
+
+    def test_no_new_data_returns_cached(self, tmp_path: Path) -> None:
+        """Should return cached events when file hasn't changed."""
+        jsonl_file = tmp_path / "session.jsonl"
+        jsonl_file.write_text(self._make_user_line("Hello") + "\n", encoding="utf-8")
+
+        config = DisplayConfig()
+        reader = IncrementalEventReader(config)
+        events1 = reader.read(jsonl_file)
+        events2 = reader.read()
+        assert events1 is events2

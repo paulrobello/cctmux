@@ -1,6 +1,7 @@
 """Session history management for cctmux."""
 
-from datetime import datetime
+import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
@@ -59,8 +60,15 @@ def save_history(history: SessionHistory, history_path: Path | None = None) -> N
     # Convert to serializable format
     data = {"entries": [entry.model_dump(mode="json") for entry in history.entries]}
 
-    with path.open("w", encoding="utf-8") as f:
-        yaml.dump(data, f, default_flow_style=False)
+    # Atomic write via temp file to prevent corruption
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
+    try:
+        with open(tmp_fd, "w", encoding="utf-8") as f:
+            yaml.dump(data, f, default_flow_style=False)
+        Path(tmp_path).replace(path)
+    except OSError:
+        Path(tmp_path).unlink(missing_ok=True)
+        raise
 
 
 def add_or_update_entry(
@@ -80,7 +88,7 @@ def add_or_update_entry(
     Returns:
         Updated history with the new/updated entry.
     """
-    now = datetime.now()
+    now = datetime.now(UTC)
 
     # Check if entry exists
     existing_idx: int | None = None

@@ -310,7 +310,7 @@ def save_ralph_state(state: RalphState, project_path: Path) -> None:
         with open(tmp_fd, "w", encoding="utf-8") as f:
             f.write(data)
         Path(tmp_path).replace(state_file)
-    except Exception:
+    except OSError:
         Path(tmp_path).unlink(missing_ok=True)
         raise
 
@@ -526,7 +526,7 @@ def run_ralph_loop(
                 output = result.stdout
                 if result.stderr:
                     err_console.print(f"[dim]{result.stderr[:200]}[/]")
-            except Exception as e:
+            except (OSError, subprocess.SubprocessError) as e:
                 exit_code = 1
                 output = str(e)
                 err_console.print(f"[red]Error running claude:[/] {e}")

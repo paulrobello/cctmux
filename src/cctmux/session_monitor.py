@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import time
 from collections import Counter
@@ -402,6 +403,15 @@ def parse_jsonl_line(
     return None
 
 
+# Pre-compiled regex patterns for model version extraction
+_MODEL_VERSION_MAJOR_MINOR_RE: dict[str, re.Pattern[str]] = {
+    family: re.compile(rf"{family}-?(\d)-(\d{{1,2}})(?:-|$)") for family in ("opus", "sonnet", "haiku")
+}
+_MODEL_VERSION_MAJOR_RE: dict[str, re.Pattern[str]] = {
+    family: re.compile(rf"{family}-?(\d)(?:-|$)") for family in ("opus", "sonnet", "haiku")
+}
+
+
 def _empty_counter() -> Counter[str]:
     return Counter()
 
@@ -466,22 +476,17 @@ class SessionStats:
         e.g., 'claude-opus-4-6-20260205' -> 'opus-4.6'
              'claude-sonnet-4-20250514' -> 'sonnet-4'
         """
-        import re
-
         model_lower = self.model.lower()
-        # Match model family and version numbers (e.g., opus-4-6 or sonnet-4-5)
-        # Only match 1-2 digit versions to avoid matching dates (8 digits)
         for family in ("opus", "sonnet", "haiku"):
             if family in model_lower:
                 # Try to extract version like "4-6" or "4-5" or "3-5"
-                # Minor version must be 1-2 digits followed by dash or end
-                version_match = re.search(rf"{family}-?(\d)-(\d{{1,2}})(?:-|$)", model_lower)
+                version_match = _MODEL_VERSION_MAJOR_MINOR_RE[family].search(model_lower)
                 if version_match:
                     major = version_match.group(1)
                     minor = version_match.group(2)
                     return f"{family}-{major}.{minor}"
                 # Try major version only
-                version_match = re.search(rf"{family}-?(\d)(?:-|$)", model_lower)
+                version_match = _MODEL_VERSION_MAJOR_RE[family].search(model_lower)
                 if version_match:
                     major = version_match.group(1)
                     return f"{family}-{major}"
@@ -1262,6 +1267,95 @@ def load_events_from_file(
     return events
 
 
+class IncrementalEventReader:
+    """Reads JSONL events incrementally, tracking file byte offset.
+
+    On each call to read(), only new bytes appended since the last read
+    are parsed.  If the file shrinks (truncation / rotation) or the path
+    changes, the reader resets and re-reads from the beginning.
+    """
+
+    def __init__(self, config: DisplayConfig) -> None:
+        self._config = config
+        self._events: list[SessionEvent] = []
+        self._byte_offset: int = 0
+        self._path: Path | None = None
+
+    def reset(self, path: Path | None = None) -> None:
+        """Reset reader state, optionally setting a new path."""
+        self._events = []
+        self._byte_offset = 0
+        if path is not None:
+            self._path = path
+
+    def read(self, path: Path | None = None) -> list[SessionEvent]:
+        """Read new events incrementally.
+
+        Args:
+            path: File to read. If different from the current path, resets
+                  and reads from scratch.
+
+        Returns:
+            The full accumulated list of events.
+        """
+        if path is not None and path != self._path:
+            self.reset(path)
+
+        if self._path is None or not self._path.exists():
+            return self._events
+
+        try:
+            file_size = self._path.stat().st_size
+        except OSError:
+            return self._events
+
+        # File shrank — full re-read
+        if file_size < self._byte_offset:
+            self._events = []
+            self._byte_offset = 0
+
+        # No new data
+        if file_size == self._byte_offset:
+            return self._events
+
+        try:
+            with self._path.open("r", encoding="utf-8") as f:
+                f.seek(self._byte_offset)
+                for line in f:
+                    stripped = line.strip()
+                    if not stripped:
+                        continue
+
+                    event = parse_jsonl_line(
+                        stripped,
+                        include_snapshots=self._config.show_snapshots,
+                        include_system=self._config.show_system,
+                    )
+                    if event is None:
+                        continue
+
+                    # Apply display filters
+                    if event.event_type == EventType.THINKING and not self._config.show_thinking:
+                        continue
+                    if event.event_type == EventType.TOOL_RESULT and not self._config.show_results:
+                        continue
+                    if event.event_type == EventType.PROGRESS and not self._config.show_progress:
+                        continue
+
+                    self._events.append(event)
+
+                self._byte_offset = f.tell()
+        except OSError:
+            pass
+
+        return self._events
+
+    @property
+    def events(self) -> list[SessionEvent]:
+        """Return the accumulated events without reading new data."""
+        return self._events
+
+
 def list_sessions(project_path: Path | None = None) -> None:
     """List available session JSONL files.
 
@@ -1440,9 +1534,11 @@ def run_session_monitor(
             show_threading=config.show_threading,
         )
 
+    reader = IncrementalEventReader(config)
+
     try:
         # Initial load
-        events = load_events_from_file(current_session_file, config)
+        events = reader.read(current_session_file)
         stats = calculate_stats(events)
 
         with Live(
@@ -1458,13 +1554,14 @@ def run_session_monitor(
                 if new_session:
                     current_session_file = new_session
                     last_size = 0  # Reset size tracking
-                    events = load_events_from_file(current_session_file, config)
+                    reader.reset(new_session)
+                    events = reader.read()
                     stats = calculate_stats(events)
                     live.update(make_display(events, stats))
                     continue
 
                 if check_for_changes():
-                    events = load_events_from_file(current_session_file, config)
+                    events = reader.read()
                     stats = calculate_stats(events)
                     live.update(make_display(events, stats))
 

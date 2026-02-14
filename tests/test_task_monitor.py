@@ -93,24 +93,27 @@ class TestLoadTasksFromDir:
 
     def test_empty_dir(self, tmp_path: Path) -> None:
         """Test loading from empty directory."""
-        tasks = load_tasks_from_dir(tmp_path)
+        tasks, skipped = load_tasks_from_dir(tmp_path)
         assert tasks == []
+        assert skipped == 0
 
     def test_nonexistent_dir(self, tmp_path: Path) -> None:
         """Test loading from nonexistent directory."""
-        tasks = load_tasks_from_dir(tmp_path / "nonexistent")
+        tasks, skipped = load_tasks_from_dir(tmp_path / "nonexistent")
         assert tasks == []
+        assert skipped == 0
 
     def test_loads_json_files(self, tmp_path: Path) -> None:
         """Test loading JSON task files."""
         (tmp_path / "1.json").write_text(json.dumps({"id": "1", "subject": "Task 1"}), encoding="utf-8")
         (tmp_path / "2.json").write_text(json.dumps({"id": "2", "subject": "Task 2"}), encoding="utf-8")
 
-        tasks = load_tasks_from_dir(tmp_path)
+        tasks, skipped = load_tasks_from_dir(tmp_path)
 
         assert len(tasks) == 2
         assert tasks[0].id == "1"
         assert tasks[1].id == "2"
+        assert skipped == 0
 
     def test_sorts_by_numeric_id(self, tmp_path: Path) -> None:
         """Test tasks are sorted by numeric ID."""
@@ -118,26 +121,27 @@ class TestLoadTasksFromDir:
         (tmp_path / "2.json").write_text(json.dumps({"id": "2", "subject": "Task 2"}), encoding="utf-8")
         (tmp_path / "1.json").write_text(json.dumps({"id": "1", "subject": "Task 1"}), encoding="utf-8")
 
-        tasks = load_tasks_from_dir(tmp_path)
+        tasks, _ = load_tasks_from_dir(tmp_path)
 
         assert [t.id for t in tasks] == ["1", "2", "10"]
 
     def test_ignores_invalid_json(self, tmp_path: Path) -> None:
-        """Test invalid JSON files are skipped."""
+        """Test invalid JSON files are skipped and counted."""
         (tmp_path / "1.json").write_text(json.dumps({"id": "1", "subject": "Valid"}), encoding="utf-8")
         (tmp_path / "bad.json").write_text("not valid json", encoding="utf-8")
 
-        tasks = load_tasks_from_dir(tmp_path)
+        tasks, skipped = load_tasks_from_dir(tmp_path)
 
         assert len(tasks) == 1
         assert tasks[0].id == "1"
+        assert skipped == 1
 
     def test_ignores_lock_files(self, tmp_path: Path) -> None:
         """Test .lock files are ignored."""
         (tmp_path / "1.json").write_text(json.dumps({"id": "1", "subject": "Task"}), encoding="utf-8")
         (tmp_path / ".lock").write_text("", encoding="utf-8")
 
-        tasks = load_tasks_from_dir(tmp_path)
+        tasks, _ = load_tasks_from_dir(tmp_path)
 
         assert len(tasks) == 1
 
@@ -170,6 +174,18 @@ class TestBuildStats:
         assert "◐ 1" in rendered
         assert "● 2" in rendered
         assert "50% complete" in rendered
+
+    def test_skipped_files_indicator(self) -> None:
+        """Test stats shows warning for corrupted task files."""
+        text = build_stats([], "test-session", skipped_files=3)
+        rendered = text.plain
+        assert "3 corrupted" in rendered
+
+    def test_no_skipped_files_no_indicator(self) -> None:
+        """Test stats hides warning when no corrupted files."""
+        text = build_stats([], "test-session", skipped_files=0)
+        rendered = text.plain
+        assert "corrupted" not in rendered
 
 
 class TestBuildDependencyGraph:
@@ -304,6 +320,43 @@ class TestTaskWindow:
         # Window should include first pending task (index 2)
         # With context_above=2, starts at max(0, 2-2)=0
         assert any(t.status == "pending" for t in window.tasks)
+
+    def test_multiple_in_progress_all_visible(self) -> None:
+        """Test that all in_progress tasks are visible when they fit."""
+        tasks = [Task(id=str(i), subject=f"Task {i}", status="pending") for i in range(20)]
+        tasks[3].status = "in_progress"
+        tasks[7].status = "in_progress"
+        tasks[10].status = "in_progress"
+
+        window = calculate_task_window(tasks, max_visible=12)
+
+        # All three in_progress tasks should be in the visible window
+        visible_statuses = [t.status for t in window.tasks]
+        assert visible_statuses.count("in_progress") == 3
+
+    def test_multiple_in_progress_partial_fit(self) -> None:
+        """Test when in_progress tasks span more than max_visible."""
+        tasks = [Task(id=str(i), subject=f"Task {i}", status="pending") for i in range(30)]
+        tasks[2].status = "in_progress"
+        tasks[20].status = "in_progress"
+
+        window = calculate_task_window(tasks, max_visible=5)
+
+        # At least the first in_progress task should be visible
+        visible_ids = [t.id for t in window.tasks]
+        assert "2" in visible_ids
+
+    def test_adjacent_in_progress_tasks(self) -> None:
+        """Test in_progress tasks next to each other are both visible."""
+        tasks = [Task(id=str(i), subject=f"Task {i}", status="pending") for i in range(15)]
+        tasks[5].status = "in_progress"
+        tasks[6].status = "in_progress"
+
+        window = calculate_task_window(tasks, max_visible=5)
+
+        visible_ids = [t.id for t in window.tasks]
+        assert "5" in visible_ids
+        assert "6" in visible_ids
 
 
 class TestResolveTaskPath:

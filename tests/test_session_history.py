@@ -1,7 +1,7 @@
 """Tests for cctmux.session_history module."""
 
 import tempfile
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
@@ -22,7 +22,7 @@ class TestSessionEntry:
 
     def test_creation(self) -> None:
         """Should create entry with all fields."""
-        now = datetime.now()
+        now = datetime.now(UTC)
         entry = SessionEntry(
             session_name="test-project",
             project_dir="/home/user/test-project",
@@ -45,7 +45,7 @@ class TestSessionHistory:
 
     def test_with_entries(self) -> None:
         """Should accept entries list."""
-        now = datetime.now()
+        now = datetime.now(UTC)
         entry = SessionEntry(
             session_name="test",
             project_dir="/test",
@@ -98,7 +98,7 @@ class TestSaveHistory:
         """Should save history to file."""
         with tempfile.TemporaryDirectory() as tmpdir:
             history_path = Path(tmpdir) / "history.yaml"
-            now = datetime.now()
+            now = datetime.now(UTC)
             entry = SessionEntry(
                 session_name="test-project",
                 project_dir="/home/user/test",
@@ -127,7 +127,7 @@ class TestAddOrUpdateEntry:
 
     def test_updates_existing_entry(self) -> None:
         """Should update last_accessed for existing entry."""
-        now = datetime.now()
+        now = datetime.now(UTC)
         entry = SessionEntry(
             session_name="existing",
             project_dir="/home/user/existing",
@@ -143,7 +143,7 @@ class TestAddOrUpdateEntry:
 
     def test_moves_updated_to_front(self) -> None:
         """Should move updated entry to front of list."""
-        now = datetime.now()
+        now = datetime.now(UTC)
         entry1 = SessionEntry(
             session_name="project-a",
             project_dir="/a",
@@ -163,7 +163,7 @@ class TestAddOrUpdateEntry:
 
     def test_prunes_excess_entries(self) -> None:
         """Should prune entries beyond max_entries."""
-        now = datetime.now()
+        now = datetime.now(UTC)
         entries = [
             SessionEntry(
                 session_name=f"project-{i}",
@@ -184,7 +184,7 @@ class TestGetRecentSessionNames:
 
     def test_returns_names_in_order(self) -> None:
         """Should return session names in order."""
-        now = datetime.now()
+        now = datetime.now(UTC)
         entries = [
             SessionEntry(
                 session_name="first",
@@ -215,7 +215,7 @@ class TestGetEntryByName:
 
     def test_finds_existing_entry(self) -> None:
         """Should find entry by name."""
-        now = datetime.now()
+        now = datetime.now(UTC)
         entry = SessionEntry(
             session_name="target",
             project_dir="/target",

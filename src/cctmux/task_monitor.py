@@ -174,18 +174,28 @@ def find_project_task_sessions(project_path: Path) -> list[SessionInfo]:
     return [s for s in sessions if s.task_path is not None]
 
 
-def load_tasks_from_dir(tasks_dir: Path) -> list[Task]:
-    """Load all tasks from a session directory."""
+def load_tasks_from_dir(tasks_dir: Path) -> tuple[list[Task], int]:
+    """Load all tasks from a session directory.
+
+    Args:
+        tasks_dir: Path to the session's task directory.
+
+    Returns:
+        Tuple of (tasks, skipped_count) where skipped_count is the number
+        of task files that failed to parse.
+    """
     tasks: list[Task] = []
+    skipped = 0
 
     if not tasks_dir.exists():
-        return tasks
+        return tasks, 0
 
     for json_file in tasks_dir.glob("*.json"):
         try:
             data = json.loads(json_file.read_text(encoding="utf-8"))
             tasks.append(Task.from_json(data))
         except (json.JSONDecodeError, OSError):
+            skipped += 1
             continue
 
     # Sort by ID (numeric first, then alphabetic)
@@ -195,7 +205,7 @@ def load_tasks_from_dir(tasks_dir: Path) -> list[Task]:
         except ValueError:
             return (1, task.id)
 
-    return sorted(tasks, key=sort_key)
+    return sorted(tasks, key=sort_key), skipped
 
 
 def find_session_dirs() -> list[tuple[str, Path]]:
@@ -268,39 +278,54 @@ def calculate_task_window(
             active_index=next((i for i, t in enumerate(tasks) if t.status == "in_progress"), None),
         )
 
-    # Find the first in_progress task
-    active_index: int | None = None
-    for i, task in enumerate(tasks):
-        if task.status == "in_progress":
-            active_index = i
-            break
+    # Find all in_progress tasks
+    active_indices = [i for i, task in enumerate(tasks) if task.status == "in_progress"]
 
-    # If no in_progress, find the first pending task
-    if active_index is None:
+    # If no in_progress, fall back to first pending task
+    if not active_indices:
         for i, task in enumerate(tasks):
             if task.status == "pending":
-                active_index = i
+                active_indices = [i]
                 break
 
     # If still none, use the first task
-    if active_index is None:
-        active_index = 0
+    if not active_indices:
+        active_indices = [0]
 
-    # Keep active task near the top (show 2-3 tasks above it for context)
-    context_above = 2
-    start = max(0, active_index - context_above)
-    end = min(total, start + max_visible)
+    first_active = active_indices[0]
+    last_active = active_indices[-1]
+    active_span = last_active - first_active + 1
 
-    # Adjust start if we hit the end
-    if end == total:
-        start = max(0, total - max_visible)
+    if active_span <= max_visible:
+        # All active tasks fit — show them with context above
+        context_above = min(2, first_active)
+        start = max(0, first_active - context_above)
+        end = min(total, start + max_visible)
+
+        # Adjust start if we hit the end
+        if end == total:
+            start = max(0, total - max_visible)
+    else:
+        # Can't fit all active tasks — start from first with minimal context
+        start = max(0, first_active - 1)
+        end = min(total, start + max_visible)
+
+        if end == total:
+            start = max(0, total - max_visible)
+
+    # Find first in_progress index within the window for display
+    active_in_window: int | None = None
+    for idx in active_indices:
+        if start <= idx < end:
+            active_in_window = idx - start
+            break
 
     return TaskWindow(
         tasks=tasks[start:end],
         start_index=start,
         end_index=end,
         total_count=total,
-        active_index=active_index - start if start <= active_index < end else None,
+        active_index=active_in_window,
     )
 
 
@@ -765,7 +790,7 @@ def build_task_table(
     return table
 
 
-def build_stats(tasks: list[Task], session_name: str, window: TaskWindow | None = None) -> Text:
+def build_stats(tasks: list[Task], session_name: str, window: TaskWindow | None = None, skipped_files: int = 0) -> Text:
     """Build statistics line.
 
     Args:
@@ -796,6 +821,10 @@ def build_stats(tasks: list[Task], session_name: str, window: TaskWindow | None 
     # Show window info if windowed
     if window and (window.has_tasks_above or window.has_tasks_below):
         text.append(f"  (showing {len(window.tasks)} of {window.total_count})", style="dim")
+
+    # Show skipped files warning
+    if skipped_files > 0:
+        text.append(f"  ⚠ {skipped_files} corrupted", style="bold red")
 
     return text
 
@@ -838,6 +867,7 @@ def build_display(
     show_description: bool = True,
     show_acceptance: bool = False,
     show_work_log: bool = False,
+    skipped_files: int = 0,
 ) -> Group:
     """Build the complete display with optional windowing.
 
@@ -864,7 +894,7 @@ def build_display(
     window = calculate_task_window(tasks, max_visible)
 
     components = [
-        Panel(build_stats(tasks, session_name, window), border_style="blue"),
+        Panel(build_stats(tasks, session_name, window, skipped_files=skipped_files), border_style="blue"),
     ]
 
     if show_graph:
@@ -1097,6 +1127,8 @@ def run_monitor(
             return newest_folder
         return None
 
+    skipped_count = 0
+
     def make_display(tasks: list[Task], display_name: str) -> Group:
         """Build display with current configuration settings."""
         return build_display(
@@ -1110,6 +1142,7 @@ def run_monitor(
             show_description=show_description,
             show_acceptance=show_acceptance,
             show_work_log=show_work_log,
+            skipped_files=skipped_count,
         )
 
     try:
@@ -1119,7 +1152,7 @@ def run_monitor(
             tasks: list[Task] = []
         else:
             assert current_task_folder is not None
-            tasks = load_tasks_from_dir(current_task_folder)
+            tasks, skipped_count = load_tasks_from_dir(current_task_folder)
             initial_display = make_display(tasks, display_name)
 
         with Live(
@@ -1138,7 +1171,7 @@ def run_monitor(
                         last_mtimes = {}  # Reset mtime tracking
                         display_name = new_session.name
                         waiting_for_tasks = False
-                        tasks = load_tasks_from_dir(current_task_folder)
+                        tasks, skipped_count = load_tasks_from_dir(current_task_folder)
                         live.update(make_display(tasks, display_name))
                         continue
 
@@ -1148,7 +1181,7 @@ def run_monitor(
 
                 if check_for_changes():
                     assert current_task_folder is not None
-                    tasks = load_tasks_from_dir(current_task_folder)
+                    tasks, skipped_count = load_tasks_from_dir(current_task_folder)
                     live.update(make_display(tasks, display_name))
 
     except KeyboardInterrupt:

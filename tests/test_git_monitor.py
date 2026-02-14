@@ -602,3 +602,63 @@ class TestBuildRemotePanel:
         status = _make_status(remote_commits=commits, last_fetch_time="12:00:00")
         panel = build_remote_panel(status)
         assert isinstance(panel, Panel)
+
+
+class TestParsePorcelainStatusOid:
+    """Tests for commit OID parsing in parse_porcelain_status."""
+
+    def test_parses_branch_oid(self) -> None:
+        """Should parse # branch.oid line."""
+        output = "# branch.head main\n# branch.oid abc123def456\n"
+        status = parse_porcelain_status(output)
+        assert status.commit_oid == "abc123def456"
+
+    def test_detached_head_with_oid(self) -> None:
+        """Should capture OID when detached."""
+        output = "# branch.head (detached)\n# branch.oid 1234567890abcdef\n"
+        status = parse_porcelain_status(output)
+        assert status.branch == "(detached)"
+        assert status.commit_oid == "1234567890abcdef"
+
+
+class TestBuildBranchPanelContent:
+    """Tests for build_branch_panel display content."""
+
+    def test_normal_branch_display(self) -> None:
+        """Should display normal branch name."""
+        from io import StringIO
+
+        from rich.console import Console
+
+        status = GitStatus(branch="main")
+        panel = build_branch_panel(status)
+        buf = StringIO()
+        Console(file=buf, force_terminal=True, width=80).print(panel)
+        output = buf.getvalue()
+        assert "main" in output
+
+    def test_detached_with_oid_display(self) -> None:
+        """Should display commit hash when detached."""
+        from io import StringIO
+
+        from rich.console import Console
+
+        status = GitStatus(branch="(detached)", commit_oid="abcdef1234567890")
+        panel = build_branch_panel(status)
+        buf = StringIO()
+        Console(file=buf, force_terminal=True, width=80).print(panel)
+        output = buf.getvalue()
+        assert "detached @ abcdef12" in output
+
+    def test_detached_without_oid_display(self) -> None:
+        """Should show plain (detached) when no OID."""
+        from io import StringIO
+
+        from rich.console import Console
+
+        status = GitStatus(branch="")
+        panel = build_branch_panel(status)
+        buf = StringIO()
+        Console(file=buf, force_terminal=True, width=80).print(panel)
+        output = buf.getvalue()
+        assert "(detached)" in output

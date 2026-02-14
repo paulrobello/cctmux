@@ -15,6 +15,7 @@ Complete reference for all cctmux predefined layouts. Each layout provides a dif
 - [Ralph Layout](#ralph-layout)
 - [Ralph-Full Layout](#ralph-full-layout)
 - [Git-Mon Layout](#git-mon-layout)
+- [Saved Layouts](#saved-layouts)
 - [Choosing a Layout](#choosing-a-layout)
 - [Related Documentation](#related-documentation)
 
@@ -424,6 +425,87 @@ cctmux -l git-mon
 
 **Monitors Launched:**
 - **Git Monitor**: Branch info, file status, recent commits, diff statistics
+
+## Saved Layouts
+
+In addition to the ten predefined layouts, Claude can save, recall, list, and delete custom pane arrangements via the cc-tmux skill. Saved layouts are stored as YAML comment blocks at the end of `~/.config/cctmux/config.yaml` and persist across sessions.
+
+### How Saved Layouts Work
+
+When working inside a cctmux session, Claude can:
+
+- **Save** the current pane arrangement (or a described arrangement) under a name
+- **Recall** a previously saved layout by name, recreating the panes and launching the configured commands
+- **List** all saved layouts to show what is available
+- **Delete** saved layouts that are no longer needed
+
+Claude checks for existing saved layouts proactively when users ask about pane management, presenting them as options before creating new panes.
+
+### Storage Format
+
+Each saved layout is a comment block appended to `~/.config/cctmux/config.yaml`. The block uses a structured format with start and end markers:
+
+```yaml
+# --- saved-layout: dev-monitor ---
+# description: Task monitor + git monitor side by side
+# panes:
+#   - split: h, size: 50, command: cctmux-tasks -g
+#   - split: v, size: 50, target: prev, command: cctmux-git
+# --- end-saved-layout ---
+```
+
+**Field definitions:**
+
+| Field | Values | Description |
+|-------|--------|-------------|
+| `split` | `h` or `v` | `h` = horizontal (new pane to the right), `v` = vertical (new pane below) |
+| `size` | integer | Percentage of the split allocated to the new pane |
+| `target` | `main` or `prev` | Which pane to split from. `main` (default) splits from the Claude pane; `prev` splits the most recently created pane |
+| `command` | string | Shell command to run in the new pane (empty for a bare shell) |
+
+### Example Saved Layouts
+
+**Three monitors:**
+```yaml
+# --- saved-layout: full-monitor ---
+# description: Session monitor, task monitor, and git monitor
+# panes:
+#   - split: h, size: 50, command: cctmux-session
+#   - split: v, size: 50, target: prev, command: cctmux-tasks -g
+#   - split: v, size: 50, target: prev, command: cctmux-git
+# --- end-saved-layout ---
+```
+
+**Dev server + tests:**
+```yaml
+# --- saved-layout: dev-test ---
+# description: Dev server on right, test runner below it
+# panes:
+#   - split: h, size: 40, command: uv run dev
+#   - split: v, size: 50, target: prev, command: uv run pytest --watch
+# --- end-saved-layout ---
+```
+
+**Bare shells for ad-hoc work:**
+```yaml
+# --- saved-layout: workspace ---
+# description: Two empty shells on the right
+# panes:
+#   - split: h, size: 40, command:
+#   - split: v, size: 50, target: prev, command:
+# --- end-saved-layout ---
+```
+
+### Usage
+
+Saved layouts are managed entirely through conversation with Claude within a cctmux session. Ask Claude to save, recall, list, or delete layouts. For example:
+
+- "Save this layout as dev-monitor"
+- "Show me my saved layouts"
+- "Activate the dev-test layout"
+- "Delete the workspace layout"
+
+The cc-tmux skill (installed via `cctmux install-skill`) provides Claude with the instructions to manage these layouts safely, using pane IDs and idempotent operations.
 
 ## Choosing a Layout
 

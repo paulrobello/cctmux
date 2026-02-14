@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import time
 from collections import Counter
@@ -298,17 +299,11 @@ def parse_subagent_file(file_path: Path) -> Subagent | None:
                             elif item_type == "text":
                                 text_content: str = str(block.get("text", ""))
                                 if text_content:
-                                    # Check for completion indicators
+                                    # Check for completion indicators using word boundaries
                                     text_lower: str = text_content.lower()
-                                    if any(
-                                        phrase in text_lower
-                                        for phrase in [
-                                            "complete",
-                                            "finished",
-                                            "done",
-                                            "summary",
-                                            "conclusion",
-                                        ]
+                                    if re.search(
+                                        r"\b(complete|finished|done|summary|conclusion)\b",
+                                        text_lower,
                                     ):
                                         status = AgentStatus.COMPLETED
                                     activity = SubagentActivity(

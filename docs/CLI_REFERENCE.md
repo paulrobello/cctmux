@@ -76,6 +76,8 @@ cctmux [OPTIONS] [COMMAND]
 | `ralph-full` | Shell + ralph monitor + task monitor |
 | `git-mon` | Claude (60%) + git status monitor (40%) |
 
+In addition to the predefined layouts, Claude can save and recall custom pane arrangements stored in the config file. See [Saved Layouts](LAYOUTS.md#saved-layouts) for details.
+
 ### Subcommands
 
 | Command | Description |
@@ -124,6 +126,61 @@ cctmux -T
 
 # Show current config
 cctmux --dump-config
+```
+
+### Session Control Flags
+
+Three shortcut flags modify how Claude Code is invoked within the tmux session. Each appends a flag to the underlying `claude` command.
+
+#### `--yolo` / `-y`
+
+Appends `--dangerously-skip-permissions` to the Claude invocation, allowing Claude to execute tools without asking for confirmation. This is useful for unattended or automated workflows where manual approval is not practical.
+
+```bash
+# Start with permission skipping
+cctmux -y
+
+# Equivalent to
+cctmux -a "--dangerously-skip-permissions"
+```
+
+#### `--resume` / `-r`
+
+Appends `--resume` to the Claude invocation, which continues the last conversation in the session. Use this to pick up where a previous session left off.
+
+```bash
+# Resume the last conversation
+cctmux -r
+
+# Equivalent to
+cctmux -a "--resume"
+```
+
+#### `--continue` / `-c`
+
+Appends `--continue` to the Claude invocation, which continues the most recent conversation. This is similar to `--resume` but specifically targets the most recent conversation.
+
+```bash
+# Continue the most recent conversation
+cctmux -c
+
+# Equivalent to
+cctmux -a "--continue"
+```
+
+#### Combining Flags
+
+These flags compose with each other and with `--claude-args`. When multiple flags are used, they are appended in order. If the flag is already present in `--claude-args`, it is not duplicated.
+
+```bash
+# Yolo mode with resume
+cctmux -y -r
+
+# Continue with a specific model
+cctmux -c -a "--model sonnet"
+
+# All three (yolo + continue + custom args)
+cctmux -y -c -a "--model opus"
 ```
 
 ## cctmux-tasks

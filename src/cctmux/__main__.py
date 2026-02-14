@@ -223,7 +223,14 @@ def main(
 
         session_name = selected
         entry = get_entry_by_name(history, session_name)
-        project_dir = Path(entry.project_dir) if entry else Path.cwd()
+        if entry:
+            project_dir = Path(entry.project_dir)
+            if not project_dir.exists():
+                err_console.print(f"[yellow]Warning:[/] Project directory no longer exists: {entry.project_dir}")
+                err_console.print("[dim]Falling back to current directory.[/]")
+                project_dir = Path.cwd()
+        else:
+            project_dir = Path.cwd()
     else:
         # Use current directory
         project_dir = Path.cwd()
@@ -262,6 +269,7 @@ def main(
             console.print("[yellow]Commands that would be executed:[/]")
             for cmd in commands:
                 console.print(f"  {cmd}")
+            console.print("[dim]Note: Actual execution uses pane IDs (%%N) for reliable targeting.[/]")
 
     # Update history (unless dry run)
     if not dry_run:

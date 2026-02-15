@@ -436,6 +436,42 @@ class TestBuildStatusPanel:
         panel = build_status_panel(status)
         assert isinstance(panel, Panel)
 
+    def test_max_files_truncates(self) -> None:
+        """Files beyond max_files should be truncated with a summary."""
+        files = [FileChange(path=f"file{i}.py", status=FileStatus.MODIFIED) for i in range(30)]
+        status = _make_status(files=files)
+        panel = build_status_panel(status, max_files=10)
+        assert isinstance(panel, Panel)
+        # The table should have 10 file rows + 1 truncation row = 11 rows
+        table = panel.renderable
+        assert table.row_count == 11  # type: ignore[union-attr]
+
+    def test_max_files_zero_unlimited(self) -> None:
+        """max_files=0 should show all files."""
+        files = [FileChange(path=f"file{i}.py", status=FileStatus.MODIFIED) for i in range(30)]
+        status = _make_status(files=files)
+        panel = build_status_panel(status, max_files=0)
+        assert isinstance(panel, Panel)
+        table = panel.renderable
+        assert table.row_count == 30  # type: ignore[union-attr]
+
+    def test_max_files_no_truncation_when_fewer(self) -> None:
+        """No truncation row when file count <= max_files."""
+        files = [FileChange(path=f"file{i}.py", status=FileStatus.MODIFIED) for i in range(5)]
+        status = _make_status(files=files)
+        panel = build_status_panel(status, max_files=20)
+        assert isinstance(panel, Panel)
+        table = panel.renderable
+        assert table.row_count == 5  # type: ignore[union-attr]
+
+    def test_subtitle_counts_all_files(self) -> None:
+        """Subtitle should count ALL files, not just displayed ones."""
+        files = [FileChange(path=f"file{i}.py", status=FileStatus.MODIFIED) for i in range(30)]
+        status = _make_status(files=files)
+        panel = build_status_panel(status, max_files=10)
+        assert panel.subtitle is not None
+        assert "30 unstaged" in str(panel.subtitle)
+
 
 class TestBuildLogPanel:
     """Tests for build_log_panel."""
@@ -471,6 +507,62 @@ class TestBuildDiffPanel:
         diffs = [DiffStat(path="a.py", insertions=10, deletions=3)]
         status = _make_status(unstaged_diff=diffs)
         panel = build_diff_panel(status)
+        assert isinstance(panel, Panel)
+
+    def test_max_files_truncates_diffs(self) -> None:
+        """Diff entries beyond max_files should be truncated."""
+        diffs = [DiffStat(path=f"file{i}.py", insertions=i, deletions=1) for i in range(30)]
+        status = _make_status(unstaged_diff=diffs)
+        panel = build_diff_panel(status, max_files=10)
+        assert isinstance(panel, Panel)
+        table = panel.renderable
+        # 1 header row ("Unstaged") + 10 diff rows + 1 truncation row = 12
+        assert table.row_count == 12  # type: ignore[union-attr]
+
+    def test_max_files_zero_unlimited_diffs(self) -> None:
+        """max_files=0 should show all diff entries."""
+        diffs = [DiffStat(path=f"file{i}.py", insertions=i, deletions=1) for i in range(30)]
+        status = _make_status(unstaged_diff=diffs)
+        panel = build_diff_panel(status, max_files=0)
+        assert isinstance(panel, Panel)
+        table = panel.renderable
+        # 1 header row + 30 diff rows = 31
+        assert table.row_count == 31  # type: ignore[union-attr]
+
+
+class TestBuildRemotePanelTruncation:
+    """Tests for build_remote_panel truncation."""
+
+    def test_max_commits_truncates(self) -> None:
+        """Remote commits beyond max_commits should be truncated."""
+        commits = [
+            CommitInfo(
+                short_hash=f"abc{i:04d}",
+                relative_time=f"{i} min ago",
+                message=f"commit {i}",
+                author="A",
+            )
+            for i in range(20)
+        ]
+        status = _make_status(remote_commits=commits, last_fetch_time="12:00:00")
+        panel = build_remote_panel(status, max_commits=5)
+        assert isinstance(panel, Panel)
+        assert panel.subtitle is not None
+        assert "20 commits" in str(panel.subtitle)
+
+    def test_max_commits_zero_unlimited(self) -> None:
+        """max_commits=0 should show all remote commits."""
+        commits = [
+            CommitInfo(
+                short_hash=f"abc{i:04d}",
+                relative_time=f"{i} min ago",
+                message=f"commit {i}",
+                author="A",
+            )
+            for i in range(20)
+        ]
+        status = _make_status(remote_commits=commits, last_fetch_time="12:00:00")
+        panel = build_remote_panel(status, max_commits=0)
         assert isinstance(panel, Panel)
 
 

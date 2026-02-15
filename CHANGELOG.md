@@ -4,6 +4,20 @@ All notable changes to cctmux will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.1] - 2026-02-15
+
+### Fixed
+
+- **Git Monitor Panel Overflow**: File status, diff stats, and remote commits panels now cap displayed items to prevent pushing other panels off screen when many files are changed
+- **Subagent Monitor Panel Overflow**: Agent table now caps displayed rows to prevent overflow with many subagents
+
+### Added
+
+- **Git Monitor `--max-files` / `-M`**: Limit files shown in status and diff panels (default: 20, 0 for unlimited)
+- **Subagent Monitor `--max-agents` / `-M`**: Limit agents shown in the table (default: 20, 0 for unlimited)
+- **`max_files` config field**: `git_monitor.max_files` in config and presets (minimal: 15, default: 20, verbose: 30, debug: 50)
+- Truncated panels show "... and N more" indicator with accurate total counts in subtitles
+
 ## [0.2.0] - 2026-02-14
 
 ### Added

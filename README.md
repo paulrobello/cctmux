@@ -277,6 +277,7 @@ cctmux-agents                   # Auto-detect from current project
 cctmux-agents abc123            # Monitor specific session
 cctmux-agents --list            # List available subagents
 cctmux-agents --no-activity     # Hide activity panel
+cctmux-agents -M 10             # Show at most 10 agents
 ```
 
 **Features:**
@@ -312,6 +313,7 @@ cctmux-git -p /path/to/repo     # Monitor specific repo
 cctmux-git --no-log             # Hide recent commits
 cctmux-git --no-diff            # Hide diff stats
 cctmux-git -m 20                # Show 20 recent commits
+cctmux-git -M 30                # Show at most 30 files (default: 20)
 cctmux-git --preset minimal     # Minimal display
 cctmux-git --fetch              # Enable periodic remote fetch
 cctmux-git --fetch -F 30        # Fetch every 30 seconds (default: 60s)
@@ -323,6 +325,7 @@ cctmux-git --fetch -F 30        # Fetch every 30 seconds (default: 60s)
 - Recent commits log with author and relative timestamps
 - Diff statistics with visual insertion/deletion bars
 - Stash count display
+- Configurable max display limits for files and commits (prevents panel overflow)
 - Periodic remote fetch with remote commits panel (opt-in via `--fetch`)
 
 ### Ralph Monitor (`cctmux-ralph`)

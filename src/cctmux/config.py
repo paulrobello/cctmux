@@ -102,6 +102,7 @@ class GitMonitorConfig(BaseModel):
     show_diff: bool = True
     show_status: bool = True
     max_commits: int = 10
+    max_files: int = 20
     poll_interval: float = 2.0
     fetch_enabled: bool = False
     fetch_interval: float = 60.0
@@ -434,6 +435,7 @@ def get_preset_config(preset: ConfigPreset) -> Config:
                 show_log=False,
                 show_diff=False,
                 max_commits=5,
+                max_files=15,
                 fetch_enabled=False,
             ),
         )
@@ -480,6 +482,7 @@ def get_preset_config(preset: ConfigPreset) -> Config:
                 show_diff=True,
                 show_status=True,
                 max_commits=20,
+                max_files=30,
                 fetch_enabled=True,
                 fetch_interval=60.0,
             ),
@@ -530,6 +533,7 @@ def get_preset_config(preset: ConfigPreset) -> Config:
                 show_diff=True,
                 show_status=True,
                 max_commits=30,
+                max_files=50,
                 fetch_enabled=True,
                 fetch_interval=30.0,
             ),

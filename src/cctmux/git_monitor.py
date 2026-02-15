@@ -472,11 +472,12 @@ def build_branch_panel(status: GitStatus) -> Panel:
     return Panel(text, title="Branch", border_style="cyan")
 
 
-def build_status_panel(status: GitStatus) -> Panel:
+def build_status_panel(status: GitStatus, max_files: int = 20) -> Panel:
     """Build a Rich panel showing file status.
 
     Args:
         status: Collected git status data.
+        max_files: Maximum number of files to display. 0 for unlimited.
 
     Returns:
         Panel with a table of changed files grouped by status.
@@ -497,15 +498,10 @@ def build_status_panel(status: GitStatus) -> Panel:
     unstaged_count = 0
     untracked_count = 0
 
-    for f in status.files:
-        icon, color = _STATUS_DISPLAY.get(f.status, ("?", "dim"))
-        display_path = f.path
-        if f.original_path:
-            display_path = f"{f.original_path} -> {f.path}"
-        table.add_row(
-            Text(icon, style=color),
-            Text(display_path),
-        )
+    total_files = len(status.files)
+    display_limit = max_files if max_files > 0 else total_files
+
+    for i, f in enumerate(status.files):
         if f.status in (
             FileStatus.STAGED_ADDED,
             FileStatus.STAGED_MODIFIED,
@@ -518,6 +514,23 @@ def build_status_panel(status: GitStatus) -> Panel:
             untracked_count += 1
         else:
             unstaged_count += 1
+
+        if i < display_limit:
+            icon, color = _STATUS_DISPLAY.get(f.status, ("?", "dim"))
+            display_path = f.path
+            if f.original_path:
+                display_path = f"{f.original_path} -> {f.path}"
+            table.add_row(
+                Text(icon, style=color),
+                Text(display_path),
+            )
+
+    hidden = total_files - display_limit
+    if hidden > 0:
+        table.add_row(
+            Text("", style="dim"),
+            Text(f"... and {hidden} more files", style="dim italic"),
+        )
 
     parts: list[str] = []
     if staged_count:
@@ -563,11 +576,12 @@ def build_log_panel(status: GitStatus) -> Panel:
     return Panel(text, title="Recent Commits", border_style="yellow")
 
 
-def build_diff_panel(status: GitStatus) -> Panel:
+def build_diff_panel(status: GitStatus, max_files: int = 20) -> Panel:
     """Build a Rich panel showing diff statistics.
 
     Args:
         status: Collected git status data.
+        max_files: Maximum number of diff entries to display. 0 for unlimited.
 
     Returns:
         Panel with staged and unstaged diff stats including visual bars.
@@ -585,10 +599,16 @@ def build_diff_panel(status: GitStatus) -> Panel:
     table.add_column("Bar", no_wrap=True)
 
     max_bar_width = 30
+    total_entries = len(status.staged_diff) + len(status.unstaged_diff)
+    display_limit = max_files if max_files > 0 else total_entries
+    rows_added = 0
 
     def _add_diff_rows(diffs: list[DiffStat]) -> None:
-        """Add diff stat rows to the table."""
+        """Add diff stat rows to the table, respecting display_limit."""
+        nonlocal rows_added
         for diff in diffs:
+            if rows_added >= display_limit:
+                break
             total = diff.insertions + diff.deletions
             changes_text = Text(str(total), style="bold")
 
@@ -601,23 +621,33 @@ def build_diff_panel(status: GitStatus) -> Panel:
                 bar.append("+" * plus_count, style="green")
                 bar.append("-" * minus_count, style="red")
             table.add_row(Text(diff.path), changes_text, bar)
+            rows_added += 1
 
     if status.staged_diff:
         table.add_row(Text("Staged", style="bold green"), Text(""), Text(""))
         _add_diff_rows(status.staged_diff)
 
-    if status.unstaged_diff:
+    if status.unstaged_diff and rows_added < display_limit:
         table.add_row(Text("Unstaged", style="bold yellow"), Text(""), Text(""))
         _add_diff_rows(status.unstaged_diff)
+
+    hidden = total_entries - min(rows_added, display_limit)
+    if hidden > 0:
+        table.add_row(
+            Text(f"... and {hidden} more files", style="dim italic"),
+            Text(""),
+            Text(""),
+        )
 
     return Panel(table, title="Diff Stats", border_style="blue")
 
 
-def build_remote_panel(status: GitStatus) -> Panel:
+def build_remote_panel(status: GitStatus, max_commits: int = 10) -> Panel:
     """Build a Rich panel showing remote-ahead commits.
 
     Args:
         status: Collected git status data.
+        max_commits: Maximum number of remote commits to display. 0 for unlimited.
 
     Returns:
         Panel with commits on the remote not yet in the local branch.
@@ -631,8 +661,12 @@ def build_remote_panel(status: GitStatus) -> Panel:
             border_style="magenta",
         )
 
+    total_count = len(status.remote_commits)
+    display_limit = max_commits if max_commits > 0 else total_count
+    display_commits = status.remote_commits[:display_limit]
+
     text = Text()
-    for i, commit in enumerate(status.remote_commits):
+    for i, commit in enumerate(display_commits):
         if i > 0:
             text.append("\n")
         text.append(commit.short_hash, style="cyan")
@@ -644,8 +678,12 @@ def build_remote_panel(status: GitStatus) -> Panel:
         text.append(commit.relative_time, style="dim")
         text.append(")", style="dim")
 
-    count = len(status.remote_commits)
-    subtitle_parts: list[str] = [f"{count} commit{'s' if count != 1 else ''}"]
+    hidden = total_count - len(display_commits)
+    if hidden > 0:
+        text.append("\n")
+        text.append(f"... and {hidden} more commits", style="dim italic")
+
+    subtitle_parts: list[str] = [f"{total_count} commit{'s' if total_count != 1 else ''}"]
     if status.last_fetch_time:
         subtitle_parts.append(f"fetched {status.last_fetch_time}")
     subtitle = ", ".join(subtitle_parts)
@@ -659,6 +697,8 @@ def build_display(
     show_diff: bool = True,
     show_status: bool = True,
     show_remote: bool = False,
+    max_files: int = 20,
+    max_commits: int = 10,
 ) -> Group:
     """Compose git status panels into a Rich Group.
 
@@ -668,6 +708,8 @@ def build_display(
         show_diff: Whether to include the diff stats panel.
         show_status: Whether to include the file status panel.
         show_remote: Whether to include the remote commits panel.
+        max_files: Maximum number of files to display. 0 for unlimited.
+        max_commits: Maximum number of commits per panel. 0 for unlimited.
 
     Returns:
         Group of Rich panels for display.
@@ -675,16 +717,16 @@ def build_display(
     panels: list[Panel] = [build_branch_panel(status)]
 
     if show_status:
-        panels.append(build_status_panel(status))
+        panels.append(build_status_panel(status, max_files=max_files))
 
     if show_remote:
-        panels.append(build_remote_panel(status))
+        panels.append(build_remote_panel(status, max_commits=max_commits))
 
     if show_log:
         panels.append(build_log_panel(status))
 
     if show_diff:
-        panels.append(build_diff_panel(status))
+        panels.append(build_diff_panel(status, max_files=max_files))
 
     return Group(*panels)
 
@@ -693,6 +735,7 @@ def run_git_monitor(
     repo_path: Path | None = None,
     poll_interval: float = 2.0,
     max_commits: int = 10,
+    max_files: int = 20,
     show_log: bool = True,
     show_diff: bool = True,
     show_status: bool = True,
@@ -705,6 +748,7 @@ def run_git_monitor(
         repo_path: Path to git repository (default: cwd).
         poll_interval: How often to poll for changes (seconds).
         max_commits: Maximum recent commits to show.
+        max_files: Maximum number of files to display. 0 for unlimited.
         show_log: Whether to show recent commits panel.
         show_diff: Whether to show diff stats panel.
         show_status: Whether to show file status panel.
@@ -761,6 +805,8 @@ def run_git_monitor(
             show_diff=show_diff,
             show_status=show_status,
             show_remote=fetch_enabled,
+            max_files=max_files,
+            max_commits=max_commits,
         )
 
         with Live(display, console=console, refresh_per_second=1) as live:
@@ -782,6 +828,8 @@ def run_git_monitor(
                         show_diff=show_diff,
                         show_status=show_status,
                         show_remote=fetch_enabled,
+                        max_files=max_files,
+                        max_commits=max_commits,
                     )
                 )
     except KeyboardInterrupt:

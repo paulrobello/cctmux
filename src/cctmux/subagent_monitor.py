@@ -633,11 +633,12 @@ def _format_tokens(count: int) -> str:
     return str(count)
 
 
-def build_agent_table(agents: list[Subagent]) -> Table:
+def build_agent_table(agents: list[Subagent], max_agents: int = 20) -> Table:
     """Build a table of subagents.
 
     Args:
         agents: List of Subagent objects.
+        max_agents: Maximum number of agents to display. 0 for unlimited.
 
     Returns:
         Rich Table with agent information.
@@ -657,7 +658,11 @@ def build_agent_table(agents: list[Subagent]) -> Table:
     table.add_column("Tools", width=15)
     table.add_column("Current Activity", ratio=2)
 
-    for agent in agents:
+    total_agents = len(agents)
+    display_limit = max_agents if max_agents > 0 else total_agents
+    display_agents = agents[:display_limit]
+
+    for agent in display_agents:
         # Status symbol
         status_text = Text(agent.status_symbol, style=agent.status_color)
 
@@ -697,6 +702,18 @@ def build_agent_table(agents: list[Subagent]) -> Table:
             tokens,
             tools_str,
             Text(activity, style=agent.status_color),
+        )
+
+    hidden = total_agents - len(display_agents)
+    if hidden > 0:
+        table.add_row(
+            Text(""),
+            Text(f"... and {hidden} more agents", style="dim italic"),
+            "",
+            "",
+            "",
+            "",
+            Text(""),
         )
 
     return table
@@ -789,6 +806,7 @@ def build_display(
     agents: list[Subagent],
     display_name: str,
     show_activity: bool = True,
+    max_agents: int = 20,
 ) -> Group:
     """Build the complete display.
 
@@ -796,13 +814,14 @@ def build_display(
         agents: List of Subagent objects.
         display_name: Display name for the session/project.
         show_activity: Whether to show the activity panel.
+        max_agents: Maximum number of agents to display. 0 for unlimited.
 
     Returns:
         Rich Group with all panels.
     """
     components = [
         build_stats_panel(agents, display_name),
-        Panel(build_agent_table(agents), title="Subagents", border_style="green"),
+        Panel(build_agent_table(agents, max_agents=max_agents), title="Subagents", border_style="green"),
     ]
 
     if show_activity:
@@ -853,6 +872,7 @@ def run_subagent_monitor(
     poll_interval: float = 1.0,
     show_activity: bool = True,
     inactive_timeout: float = 300.0,
+    max_agents: int = 20,
 ) -> None:
     """Run the subagent monitor with Rich Live.
 
@@ -863,6 +883,7 @@ def run_subagent_monitor(
         show_activity: Whether to show the activity panel.
         inactive_timeout: Seconds of inactivity before hiding an agent.
             Use 0 to disable filtering. Default is 300 (5 minutes).
+        max_agents: Maximum number of agents to display. 0 for unlimited.
     """
     console = Console()
 
@@ -913,7 +934,7 @@ def run_subagent_monitor(
                 if data_hash != last_data_hash:
                     last_data_hash = data_hash
                     if agents:
-                        live.update(build_display(agents, display_name, show_activity))
+                        live.update(build_display(agents, display_name, show_activity, max_agents=max_agents))
                     else:
                         live.update(
                             Panel(

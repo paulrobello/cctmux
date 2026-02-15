@@ -645,6 +645,10 @@ def agents_main(
             help="Hide agents inactive for this many seconds. 0 to show all. Default: 300 (5 min).",
         ),
     ] = None,
+    max_agents: Annotated[
+        int,
+        typer.Option("--max-agents", "-M", help="Maximum agents to show (0 for unlimited)."),
+    ] = 20,
     no_activity: Annotated[
         bool,
         typer.Option("--no-activity", "-a", help="Hide the activity panel."),
@@ -692,6 +696,7 @@ def agents_main(
         poll_interval=interval,
         show_activity=not no_activity,
         inactive_timeout=effective_timeout,
+        max_agents=max_agents,
     )
 
 
@@ -800,6 +805,10 @@ def git_main(
         int,
         typer.Option("--max-commits", "-m", help="Maximum recent commits to show."),
     ] = 10,
+    max_files: Annotated[
+        int,
+        typer.Option("--max-files", "-M", help="Maximum files to show (0 for unlimited)."),
+    ] = 20,
     no_log: Annotated[
         bool,
         typer.Option("--no-log", help="Hide recent commits panel."),
@@ -860,6 +869,7 @@ def git_main(
         effective_show_diff = git_config.show_diff
         effective_show_status = git_config.show_status
         effective_max_commits = git_config.max_commits
+        effective_max_files = git_config.max_files
         effective_interval = git_config.poll_interval
         effective_fetch_enabled = git_config.fetch_enabled
         effective_fetch_interval = git_config.fetch_interval
@@ -868,6 +878,7 @@ def git_main(
         effective_show_diff = not no_diff
         effective_show_status = not no_status
         effective_max_commits = max_commits
+        effective_max_files = max_files
         effective_interval = interval
         # Use config defaults when no preset
         config, _git_warnings = load_config(project_dir=project or Path.cwd())
@@ -877,6 +888,8 @@ def git_main(
     # CLI overrides preset
     if max_commits != 10:
         effective_max_commits = max_commits
+    if max_files != 20:
+        effective_max_files = max_files
     if interval != 2.0:
         effective_interval = interval
 
@@ -892,6 +905,7 @@ def git_main(
         repo_path=project,
         poll_interval=effective_interval,
         max_commits=effective_max_commits,
+        max_files=effective_max_files,
         show_log=effective_show_log,
         show_diff=effective_show_diff,
         show_status=effective_show_status,

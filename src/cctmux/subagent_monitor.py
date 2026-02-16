@@ -448,7 +448,6 @@ def filter_inactive_agents(
     if inactive_timeout <= 0:
         return agents
 
-
     now = datetime.now(tz=UTC)
     result: list[Subagent] = []
     for agent in agents:

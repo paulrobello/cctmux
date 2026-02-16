@@ -1025,8 +1025,18 @@ def _find_most_recent_task_folder(
     return best
 
 
-def _build_waiting_display(project_name: str) -> Panel:
-    """Build a display panel for when waiting for tasks."""
+def _build_waiting_display(project_name: str, compact: bool = False) -> Panel:
+    """Build a display panel for when waiting for tasks.
+
+    Args:
+        project_name: Project name to display.
+        compact: If True, show a single-line compact display.
+    """
+    if compact:
+        text = Text()
+        text.append("Waiting for tasks...", style="yellow")
+        return Panel(text, border_style="yellow")
+
     text = Text()
     text.append("Waiting for tasks...\n\n", style="yellow")
     text.append(f"Project: {project_name}\n", style="dim")
@@ -1076,6 +1086,7 @@ def run_monitor(
 
     # Track whether we're in "waiting" mode (no tasks found yet)
     waiting_for_tasks = task_path is None
+    stats_only = not show_table and not show_graph
 
     console.clear()
 
@@ -1148,7 +1159,7 @@ def run_monitor(
     try:
         # Initial display
         if waiting_for_tasks:
-            initial_display = _build_waiting_display(effective_project.name)
+            initial_display = _build_waiting_display(effective_project.name, compact=stats_only)
             tasks: list[Task] = []
         else:
             assert current_task_folder is not None

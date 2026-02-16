@@ -333,7 +333,7 @@ cctmux -l dashboard
 
 ## Par Mode
 
-Par mode sets up a triple layout with the task monitor in pane 2 and git monitor in pane 3. It checks the current layout and only reconfigures if needed.
+Par mode sets up a triple layout with a compact task stats panel (pane 2) and git monitor (pane 3). It checks the current layout and only reconfigures if needed.
 
 ### Activating Par Mode
 
@@ -377,7 +377,7 @@ if [ "$PANE_COUNT" -eq 3 ]; then
     # Stop any running processes in side panes, then launch monitors
     tmux send-keys -t "$SIDE1" C-c
     sleep 0.3
-    tmux send-keys -t "$SIDE1" "cctmux-tasks -g" Enter
+    tmux send-keys -t "$SIDE1" "cctmux-tasks -s" Enter
 
     tmux send-keys -t "$SIDE2" C-c
     sleep 0.3
@@ -399,11 +399,11 @@ fi
 # Split horizontally with 50% on the right, capture pane ID
 RIGHT_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -p 50)
 
-# Launch task monitor in the right pane
-tmux send-keys -t "$RIGHT_PANE" "cctmux-tasks -g" Enter
+# Launch stats-only task monitor in the right pane (compact single-line display)
+tmux send-keys -t "$RIGHT_PANE" "cctmux-tasks -s" Enter
 
-# Split right pane vertically 50/50, capture bottom pane ID
-BOTTOM_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$RIGHT_PANE" -v -p 50)
+# Split right pane vertically — tasks stays on top (3 rows), git gets the rest
+BOTTOM_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$RIGHT_PANE" -v -p 93)
 
 # Launch git monitor in the bottom-right pane
 tmux send-keys -t "$BOTTOM_PANE" "cctmux-git" Enter
@@ -415,11 +415,11 @@ echo "Par mode activated"
 
 ```
 ---------------------------------
-|            | cctmux-tasks     |
-|  CLAUDE    |      50%         |
-|   50%      |------------------|
-|            | cctmux-git       |
-|            |      50%         |
+|            | cctmux-tasks -s  |
+|  CLAUDE    |------------------|
+|   50%      |                  |
+|            | cctmux-git  93%  |
+|            |                  |
 ---------------------------------
 ```
 

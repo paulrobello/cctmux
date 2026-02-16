@@ -4,6 +4,16 @@ All notable changes to cctmux will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.3] - 2026-02-16
+
+### Fixed
+
+- **Subagent Monitor Timezone Bug**: Inactive agent filtering compared local-naive time against UTC-naive timestamps, causing completed agents to never be filtered out for users west of UTC
+
+### Changed
+
+- Removed "Press Ctrl+C to exit" messages from all monitors — redundant since Ctrl+C is standard terminal behavior
+
 ## [0.2.2] - 2026-02-16
 
 ### Added

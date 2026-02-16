@@ -113,6 +113,9 @@ default_claude_args: null
 # Set CLAUDE_CODE_TASK_LIST_ID environment variable
 task_list_id: false
 
+# Enable experimental agent teams
+agent_teams: false
+
 # Skip user config when set in project config
 ignore_parent_configs: false
 
@@ -275,6 +278,7 @@ git_monitor:
 | `max_history_entries` | integer | `50` | Max session history entries |
 | `default_claude_args` | string | `null` | Default claude CLI arguments |
 | `task_list_id` | boolean | `false` | Set task list ID env var |
+| `agent_teams` | boolean | `false` | Enable experimental agent teams |
 | `ignore_parent_configs` | boolean | `false` | Skip user config (project configs only) |
 | `custom_layouts` | list | `[]` | Custom layout definitions |
 
@@ -595,6 +599,7 @@ cctmux sets environment variables in tmux sessions:
 | `CCTMUX_SESSION` | Current tmux session name |
 | `CCTMUX_PROJECT_DIR` | Project directory path |
 | `CLAUDE_CODE_TASK_LIST_ID` | Session name (if `--task-list-id` enabled) |
+| `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | Set to `1` (if `--agent-teams` enabled) |
 
 ### Checking Environment Variables
 
@@ -621,6 +626,23 @@ cctmux -T
 ```
 
 This sets `CLAUDE_CODE_TASK_LIST_ID` to the session name, allowing tasks to be scoped to the session.
+
+### Agent Teams
+
+Enable experimental agent teams mode:
+
+```yaml
+# In config.yaml
+agent_teams: true
+```
+
+Or via CLI:
+
+```bash
+cctmux -A
+```
+
+This sets `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`, enabling Claude Code's experimental agent teams feature.
 
 ## Related Documentation
 

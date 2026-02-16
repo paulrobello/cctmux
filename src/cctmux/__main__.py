@@ -137,6 +137,12 @@ def main(
         bool,
         typer.Option("--task-list-id", "-T", help="Set CLAUDE_CODE_TASK_LIST_ID to session name."),
     ] = False,
+    agent_teams: Annotated[
+        bool,
+        typer.Option(
+            "--agent-teams", "-A", help="Enable experimental agent teams (CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1)."
+        ),
+    ] = False,
     strict: Annotated[
         bool,
         typer.Option("--strict", help="Exit with error on config validation warnings."),
@@ -202,6 +208,7 @@ def main(
         else:
             effective_claude_args = continue_flag
     effective_task_list_id = task_list_id or config.task_list_id
+    effective_agent_teams = agent_teams or config.agent_teams
 
     if debug or verbose > 1:
         console.print(f"[dim]Config file: {get_config_file_path()}[/]")
@@ -291,6 +298,7 @@ def main(
             status_bar=effective_status_bar,
             claude_args=effective_claude_args,
             task_list_id=effective_task_list_id,
+            agent_teams=effective_agent_teams,
             custom_layouts=config.custom_layouts,
             dry_run=dry_run,
         )

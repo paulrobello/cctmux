@@ -4,6 +4,13 @@ All notable changes to cctmux will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.2] - 2026-02-16
+
+### Added
+
+- **Agent Teams Support** (`--agent-teams`, `-A`): New flag to enable Claude Code's experimental agent teams feature by setting `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` environment variable
+- **Agent Teams Config**: Added `agent_teams` boolean field to config model for persistent agent teams setting
+
 ## [0.2.1] - 2026-02-15
 
 ### Fixed

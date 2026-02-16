@@ -186,6 +186,7 @@ class Config(BaseModel):
     max_history_entries: int = 50
     default_claude_args: str | None = None
     task_list_id: bool = False
+    agent_teams: bool = False
 
     # When true in a project config, ignore all parent configs (user config)
     ignore_parent_configs: bool = False

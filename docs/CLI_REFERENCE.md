@@ -59,6 +59,7 @@ cctmux [OPTIONS] [COMMAND]
 | `--claude-args` | `-a` | Arguments to pass to claude command | `None` |
 | `--yolo` | `-y` | Append `--dangerously-skip-permissions` to claude invocation | `false` |
 | `--task-list-id` | `-T` | Set `CLAUDE_CODE_TASK_LIST_ID` to session name | `false` |
+| `--agent-teams` | `-A` | Enable experimental agent teams (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`) | `false` |
 | `--version` | | Show version | |
 | `--help` | | Show help | |
 

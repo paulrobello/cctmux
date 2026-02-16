@@ -37,6 +37,7 @@ def create_session(
     status_bar: bool = False,
     claude_args: str | None = None,
     task_list_id: bool = False,
+    agent_teams: bool = False,
     custom_layouts: list[CustomLayout] | None = None,
     dry_run: bool = False,
 ) -> list[str]:
@@ -49,6 +50,7 @@ def create_session(
         status_bar: Whether to enable status bar.
         claude_args: Additional arguments to pass to claude command.
         task_list_id: Whether to set CLAUDE_CODE_TASK_LIST_ID to session name.
+        agent_teams: Whether to enable experimental agent teams.
         custom_layouts: Optional list of custom layouts for name resolution.
         dry_run: If True, return commands without executing.
 
@@ -82,10 +84,19 @@ def create_session(
         if not dry_run:
             subprocess.run(env_cmd3, check=True)
 
+    # Set CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS if requested
+    if agent_teams:
+        env_cmd4 = ["tmux", "set-environment", "-t", session_name, "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS", "1"]
+        commands.append(" ".join(env_cmd4))
+        if not dry_run:
+            subprocess.run(env_cmd4, check=True)
+
     # Export environment variables to the current shell
     export_vars = f"CCTMUX_SESSION={session_name} CCTMUX_PROJECT_DIR={dir_str}"
     if task_list_id:
         export_vars += f" CLAUDE_CODE_TASK_LIST_ID={session_name}"
+    if agent_teams:
+        export_vars += " CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1"
     export_cmd = f"export {export_vars}"
     export_keys = ["tmux", "send-keys", "-t", session_name, export_cmd, "Enter"]
     commands.append(" ".join(export_keys))

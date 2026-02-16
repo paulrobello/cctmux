@@ -497,6 +497,7 @@ Inside a cctmux session:
 | `CCTMUX_SESSION` | The tmux session name |
 | `CCTMUX_PROJECT_DIR` | The project directory path |
 | `CLAUDE_CODE_TASK_LIST_ID` | Session name (if `--task-list-id` enabled) |
+| `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | Set to `1` (if `--agent-teams` enabled) |
 
 ## Requirements
 

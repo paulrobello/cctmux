@@ -774,6 +774,9 @@ cctmux-tasks -p /path/to/project
 # Show only dependency graph (no table)
 cctmux-tasks -g
 
+# Show only stats panel (no graph or table)
+cctmux-tasks -s
+
 # Custom poll interval (default 1.0 seconds)
 cctmux-tasks -i 0.5
 

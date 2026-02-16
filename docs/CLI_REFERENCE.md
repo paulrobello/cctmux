@@ -240,6 +240,7 @@ cctmux-tasks [OPTIONS] [SESSION_OR_PATH]
 | `--max-tasks` | `-m` | Maximum tasks to display | Auto-detect |
 | `--no-table` | `-g` | Show only dependency graph | `false` |
 | `--table-only` | `-t` | Show only table, no graph | `false` |
+| `--stats-only` | `-s` | Show only the stats panel (session, counts, progress) | `false` |
 | `--no-owner` | | Hide task owner column | `false` |
 | `--show-metadata` | | Show custom task metadata | `false` |
 | `--no-description` | | Hide task descriptions | `false` |
@@ -275,6 +276,9 @@ cctmux-tasks --list
 
 # Show only dependency graph
 cctmux-tasks -g
+
+# Show only stats panel (no graph or table)
+cctmux-tasks -s
 
 # Show acceptance criteria
 cctmux-tasks --show-acceptance

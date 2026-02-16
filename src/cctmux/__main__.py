@@ -389,6 +389,10 @@ def tasks_main(
         bool,
         typer.Option("--show-work-log", help="Show work log from metadata."),
     ] = False,
+    stats_only: Annotated[
+        bool,
+        typer.Option("--stats-only", "-s", help="Show only the stats panel (session, counts, progress)."),
+    ] = False,
     preset: Annotated[
         ConfigPreset | None,
         typer.Option("--preset", help="Use preset configuration (minimal, verbose, debug)."),
@@ -416,6 +420,7 @@ def tasks_main(
         cctmux-tasks --list             # List all available sessions
         cctmux-tasks -m 20              # Show max 20 tasks
         cctmux-tasks --show-metadata    # Show custom metadata
+        cctmux-tasks --stats-only       # Show only the stats panel
         cctmux-tasks --preset verbose   # Use verbose preset
     """
     if ctx.invoked_subcommand is not None:
@@ -446,6 +451,11 @@ def tasks_main(
         effective_show_acceptance = show_acceptance
         effective_show_work_log = show_work_log
         effective_max_tasks = max_tasks
+
+    # stats_only overrides graph and table
+    if stats_only:
+        effective_show_graph = False
+        effective_show_table = False
 
     # CLI overrides preset
     if max_tasks is not None:

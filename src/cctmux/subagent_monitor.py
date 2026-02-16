@@ -907,7 +907,7 @@ def run_subagent_monitor(
 
     console.clear()
     console.print(f"[bold cyan]Subagent Monitor[/] - {display_name}")
-    console.print("[dim]Press Ctrl+C to exit | Auto-refreshes every poll interval[/]\n")
+    console.print("[dim]Auto-refreshes every poll interval[/]\n")
 
     # Track last data hash to avoid unnecessary display updates
     last_data_hash = ""

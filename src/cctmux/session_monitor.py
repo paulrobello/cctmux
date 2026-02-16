@@ -1482,7 +1482,7 @@ def run_session_monitor(
     console.clear()
     console.print(f"[bold cyan]Session Monitor[/] - Watching: {jsonl_path.name}")
     console.print(f"[dim]Display: {display_name}[/]")
-    console.print("[dim]Press Ctrl+C to exit | Auto-detects new sessions[/]\n")
+    console.print("[dim]Auto-detects new sessions[/]\n")
 
     last_size = 0
     last_check_time = 0.0

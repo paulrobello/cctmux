@@ -772,8 +772,10 @@ def run_git_monitor(
 
     console.clear()
     console.print(f"[bold cyan]Git Monitor[/] - {effective_path.name}")
-    fetch_hint = f" | fetch every {fetch_interval:.0f}s" if fetch_enabled else ""
-    console.print(f"[dim]Press Ctrl+C to exit{fetch_hint}[/]\n")
+    if fetch_enabled:
+        console.print(f"[dim]fetch every {fetch_interval:.0f}s[/]\n")
+    else:
+        console.print()
 
     last_fetch_time: float = 0.0
     last_fetch_display: str = ""

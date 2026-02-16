@@ -8,7 +8,7 @@ import shutil
 import time
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, cast
@@ -448,13 +448,16 @@ def filter_inactive_agents(
     if inactive_timeout <= 0:
         return agents
 
-    now = datetime.now(tz=None)
+
+    now = datetime.now(tz=UTC)
     result: list[Subagent] = []
     for agent in agents:
         if agent.last_timestamp is None:
             # No timestamp at all — skip
             continue
-        last_ts = agent.last_timestamp.replace(tzinfo=None) if agent.last_timestamp.tzinfo else agent.last_timestamp
+        last_ts = agent.last_timestamp
+        if last_ts.tzinfo is None:
+            last_ts = last_ts.replace(tzinfo=UTC)
         elapsed = (now - last_ts).total_seconds()
         if elapsed <= inactive_timeout:
             result.append(agent)

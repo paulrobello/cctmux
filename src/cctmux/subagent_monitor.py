@@ -809,6 +809,8 @@ def build_display(
     display_name: str,
     show_activity: bool = True,
     max_agents: int = 20,
+    max_activities: int = 15,
+    terminal_height: int = 0,
 ) -> Group:
     """Build the complete display.
 
@@ -817,17 +819,53 @@ def build_display(
         display_name: Display name for the session/project.
         show_activity: Whether to show the activity panel.
         max_agents: Maximum number of agents to display. 0 for unlimited.
+        max_activities: Maximum number of recent activities to show.
+        terminal_height: Terminal height for dynamic sizing. 0 to disable.
 
     Returns:
         Rich Group with all panels.
     """
+    effective_agents = max_agents
+    effective_activities = max_activities
+
+    if terminal_height > 0:
+        # Stats panel: 2 content lines + 2 borders = 4 rows
+        stats_height = 4
+        available = terminal_height - stats_height
+
+        # Agent table overhead: 2 panel borders + 1 table header = 3
+        agent_overhead = 3
+        # Activity panel overhead: 2 panel borders
+        activity_overhead = 2
+
+        natural_agents = min(len(agents), max_agents) if max_agents > 0 else len(agents)
+        natural_agents = max(natural_agents, 1)
+
+        if show_activity:
+            total_activities = sum(min(10, len(a.activities)) for a in agents)
+            natural_activities = max(min(total_activities, max_activities), 1)
+            total_natural = natural_agents + natural_activities
+            content_budget = max(2, available - agent_overhead - activity_overhead)
+
+            if content_budget >= total_natural:
+                effective_agents = natural_agents
+                effective_activities = natural_activities
+            else:
+                effective_agents = max(1, round(content_budget * natural_agents / total_natural))
+                effective_activities = max(1, content_budget - effective_agents)
+                effective_agents = min(effective_agents, natural_agents)
+                effective_activities = min(effective_activities, natural_activities)
+        else:
+            content_budget = max(1, available - agent_overhead)
+            effective_agents = min(natural_agents, content_budget)
+
     components = [
         build_stats_panel(agents, display_name),
-        Panel(build_agent_table(agents, max_agents=max_agents), title="Subagents", border_style="green"),
+        Panel(build_agent_table(agents, max_agents=effective_agents), title="Subagents", border_style="green"),
     ]
 
     if show_activity:
-        components.append(build_activity_panel(agents))
+        components.append(build_activity_panel(agents, max_activities=effective_activities))
 
     return Group(*components)
 
@@ -936,7 +974,15 @@ def run_subagent_monitor(
                 if data_hash != last_data_hash:
                     last_data_hash = data_hash
                     if agents:
-                        live.update(build_display(agents, display_name, show_activity, max_agents=max_agents))
+                        live.update(
+                            build_display(
+                                agents,
+                                display_name,
+                                show_activity,
+                                max_agents=max_agents,
+                                terminal_height=console.height - 2,
+                            )
+                        )
                     else:
                         live.update(
                             Panel(

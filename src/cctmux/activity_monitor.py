@@ -317,12 +317,17 @@ def build_ascii_heatmap(stats: ActivityStats, days: int = 14) -> Text:
     return text
 
 
-def build_model_usage_table(stats: ActivityStats, show_cost: bool = True) -> Table:
+def build_model_usage_table(
+    stats: ActivityStats,
+    show_cost: bool = True,
+    max_models: int = 0,
+) -> Table:
     """Build a table of model usage.
 
     Args:
         stats: Activity statistics.
         show_cost: Whether to show cost estimates.
+        max_models: Maximum number of models to display. 0 for unlimited.
 
     Returns:
         Rich Table with model usage.
@@ -337,7 +342,10 @@ def build_model_usage_table(stats: ActivityStats, show_cost: bool = True) -> Tab
     if show_cost:
         table.add_column("Est. Cost", width=10)
 
-    for _model_name, usage in sorted(stats.model_usage.items()):
+    sorted_models = sorted(stats.model_usage.items())
+    display_models = sorted_models[:max_models] if max_models > 0 else sorted_models
+
+    for _model_name, usage in display_models:
         row: list[str | Text] = [
             Text(usage.model_short, style="cyan"),
             _format_tokens(usage.input_tokens),
@@ -349,6 +357,19 @@ def build_model_usage_table(stats: ActivityStats, show_cost: bool = True) -> Tab
             cost = estimate_cost(usage)
             row.append(Text(f"${cost:.2f}", style="yellow"))
         table.add_row(*row)
+
+    hidden = len(sorted_models) - len(display_models)
+    if hidden > 0:
+        truncation_row: list[str | Text] = [
+            Text(f"... and {hidden} more models", style="dim italic"),
+            "",
+            "",
+            "",
+            "",
+        ]
+        if show_cost:
+            truncation_row.append("")
+        table.add_row(*truncation_row)
 
     return table
 
@@ -444,6 +465,7 @@ def build_display(
     show_tool_usage: bool = True,
     show_model_usage: bool = True,
     show_hour_distribution: bool = False,
+    terminal_height: int = 0,
 ) -> Group:
     """Build the complete activity dashboard display.
 
@@ -455,10 +477,51 @@ def build_display(
         show_tool_usage: Whether to show tool usage (in heatmap).
         show_model_usage: Whether to show model usage table.
         show_hour_distribution: Whether to show hourly distribution.
+        terminal_height: Terminal height for dynamic sizing. 0 to disable.
 
     Returns:
         Rich Group with all panels.
     """
+    effective_days = days
+    effective_max_models = 0  # 0 = unlimited
+
+    if terminal_height > 0:
+        # Summary panel: ~6 content lines + 2 borders = 8
+        summary_height = 8
+        # Hourly distribution: 24 content lines + 2 borders = 26 (if shown)
+        hourly_height = 26 if show_hour_distribution else 0
+        available = terminal_height - summary_height - hourly_height
+
+        # Variable panels: heatmap and model usage
+        heatmap_overhead = 2  # panel borders
+        model_overhead = 3  # panel borders + table header
+
+        show_heat = show_heatmap
+        show_models = show_model_usage
+
+        natural_heatmap = min(days, len(stats.daily_activity)) if show_heat else 0
+        natural_heatmap = max(natural_heatmap, 1) if show_heat else 0
+        natural_models = len(stats.model_usage) if show_models else 0
+        natural_models = max(natural_models, 1) if show_models else 0
+
+        if show_heat and show_models:
+            total_natural = natural_heatmap + natural_models
+            content_budget = max(2, available - heatmap_overhead - model_overhead)
+            if content_budget >= total_natural:
+                effective_days = natural_heatmap
+                effective_max_models = natural_models
+            else:
+                heat_share = max(1, round(content_budget * natural_heatmap / total_natural))
+                model_share = max(1, content_budget - heat_share)
+                effective_days = min(heat_share, natural_heatmap)
+                effective_max_models = min(model_share, natural_models)
+        elif show_heat:
+            content_budget = max(1, available - heatmap_overhead)
+            effective_days = min(natural_heatmap, content_budget)
+        elif show_models:
+            content_budget = max(1, available - model_overhead)
+            effective_max_models = min(natural_models, content_budget)
+
     components: list[Panel | Table] = [
         build_summary_panel(stats, show_cost),
     ]
@@ -466,8 +529,8 @@ def build_display(
     if show_heatmap:
         components.append(
             Panel(
-                build_ascii_heatmap(stats, days),
-                title=f"Activity Heatmap (Last {days} Days)",
+                build_ascii_heatmap(stats, effective_days),
+                title=f"Activity Heatmap (Last {effective_days} Days)",
                 border_style="cyan",
             )
         )
@@ -475,7 +538,7 @@ def build_display(
     if show_model_usage:
         components.append(
             Panel(
-                build_model_usage_table(stats, show_cost),
+                build_model_usage_table(stats, show_cost, max_models=effective_max_models),
                 title="Model Usage",
                 border_style="green",
             )
@@ -530,6 +593,7 @@ def run_activity_monitor(
         show_cost=show_cost,
         show_model_usage=show_model_usage,
         show_hour_distribution=show_hour_distribution,
+        terminal_height=console.height - 2,
     )
 
     console.print(display)

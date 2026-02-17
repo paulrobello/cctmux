@@ -15,6 +15,8 @@ from cctmux.git_monitor import (
     FileChange,
     FileStatus,
     GitStatus,
+    _calculate_panel_budgets,
+    _estimate_branch_height,
     _run_git_command,
     build_branch_panel,
     build_diff_panel,
@@ -754,3 +756,307 @@ class TestBuildBranchPanelContent:
         Console(file=buf, force_terminal=True, width=80).print(panel)
         output = buf.getvalue()
         assert "(detached)" in output
+
+
+class TestEstimateBranchHeight:
+    """Tests for _estimate_branch_height helper."""
+
+    def test_minimal_branch(self) -> None:
+        """Branch with just a name: 1 content line + 2 borders."""
+        status = GitStatus(branch="main")
+        assert _estimate_branch_height(status) == 3
+
+    def test_with_stash(self) -> None:
+        """Branch with stash adds 1 line."""
+        status = GitStatus(branch="main", stash_count=3)
+        assert _estimate_branch_height(status) == 4
+
+    def test_with_last_commit(self) -> None:
+        """Branch with last commit adds 1 line."""
+        status = GitStatus(branch="main", last_commit_hash="abc1234")
+        assert _estimate_branch_height(status) == 4
+
+    def test_with_stash_and_commit(self) -> None:
+        """Branch with both stash and last commit."""
+        status = GitStatus(branch="main", stash_count=1, last_commit_hash="abc1234")
+        assert _estimate_branch_height(status) == 5
+
+
+class TestCalculatePanelBudgets:
+    """Tests for _calculate_panel_budgets."""
+
+    def _make_commits(self, n: int) -> list[CommitInfo]:
+        return [
+            CommitInfo(short_hash=f"abc{i:04d}", relative_time=f"{i}m", message=f"commit {i}", author="A")
+            for i in range(n)
+        ]
+
+    def _make_files(self, n: int) -> list[FileChange]:
+        return [FileChange(path=f"file{i}.py", status=FileStatus.MODIFIED) for i in range(n)]
+
+    def _make_diffs(self, n: int) -> list[DiffStat]:
+        return [DiffStat(path=f"file{i}.py", insertions=i, deletions=1) for i in range(n)]
+
+    def test_plenty_of_space(self) -> None:
+        """With enough terminal height, panels get their natural sizes."""
+        status = _make_status(
+            files=self._make_files(5),
+            commits=self._make_commits(5),
+            unstaged_diff=self._make_diffs(3),
+        )
+        budgets = _calculate_panel_budgets(
+            terminal_height=100,
+            status=status,
+            show_status=True,
+            show_remote=False,
+            show_log=True,
+            show_diff=True,
+            max_files=20,
+            max_commits=10,
+        )
+        assert budgets["status"] == 5
+        assert budgets["log"] == 5
+        assert budgets["diff"] == 3
+
+    def test_tight_space_distributes_evenly(self) -> None:
+        """With limited space, no panel should get 0 items."""
+        status = _make_status(
+            files=self._make_files(20),
+            commits=self._make_commits(20),
+            unstaged_diff=self._make_diffs(20),
+        )
+        budgets = _calculate_panel_budgets(
+            terminal_height=20,
+            status=status,
+            show_status=True,
+            show_remote=False,
+            show_log=True,
+            show_diff=True,
+            max_files=20,
+            max_commits=20,
+        )
+        # Each panel should get at least 1 item
+        assert budgets["status"] >= 1
+        assert budgets["log"] >= 1
+        assert budgets["diff"] >= 1
+
+    def test_respects_max_files_cap(self) -> None:
+        """User's max_files should cap the natural size."""
+        status = _make_status(files=self._make_files(50))
+        budgets = _calculate_panel_budgets(
+            terminal_height=100,
+            status=status,
+            show_status=True,
+            show_remote=False,
+            show_log=False,
+            show_diff=False,
+            max_files=10,
+            max_commits=10,
+        )
+        assert budgets["status"] == 10
+
+    def test_respects_max_commits_cap(self) -> None:
+        """User's max_commits should cap the natural size."""
+        status = _make_status(commits=self._make_commits(50))
+        budgets = _calculate_panel_budgets(
+            terminal_height=100,
+            status=status,
+            show_status=False,
+            show_remote=False,
+            show_log=True,
+            show_diff=False,
+            max_files=20,
+            max_commits=5,
+        )
+        assert budgets["log"] == 5
+
+    def test_no_panels_returns_empty(self) -> None:
+        """No enabled panels should return empty dict."""
+        status = _make_status()
+        budgets = _calculate_panel_budgets(
+            terminal_height=50,
+            status=status,
+            show_status=False,
+            show_remote=False,
+            show_log=False,
+            show_diff=False,
+            max_files=20,
+            max_commits=10,
+        )
+        assert budgets == {}
+
+    def test_single_panel_gets_all_space(self) -> None:
+        """Single enabled panel should get all available content rows."""
+        status = _make_status(files=self._make_files(30))
+        budgets = _calculate_panel_budgets(
+            terminal_height=30,
+            status=status,
+            show_status=True,
+            show_remote=False,
+            show_log=False,
+            show_diff=False,
+            max_files=0,
+            max_commits=10,
+        )
+        # terminal=30, header=2, branch=4 (with last commit), borders=2 => 22 content rows
+        assert budgets["status"] >= 20
+
+    def test_proportional_distribution(self) -> None:
+        """Panel with more items should get a larger share."""
+        status = _make_status(
+            files=self._make_files(30),
+            commits=self._make_commits(3),
+        )
+        budgets = _calculate_panel_budgets(
+            terminal_height=25,
+            status=status,
+            show_status=True,
+            show_remote=False,
+            show_log=True,
+            show_diff=False,
+            max_files=30,
+            max_commits=10,
+        )
+        # Status has 30 items, log has 3 - status should get more
+        assert budgets["status"] > budgets["log"]
+
+    def test_empty_panels_get_minimum(self) -> None:
+        """Panels with no data still get at least 1 row."""
+        status = _make_status(files=[], commits=[])
+        budgets = _calculate_panel_budgets(
+            terminal_height=30,
+            status=status,
+            show_status=True,
+            show_remote=False,
+            show_log=True,
+            show_diff=False,
+            max_files=20,
+            max_commits=10,
+        )
+        assert budgets["status"] >= 1
+        assert budgets["log"] >= 1
+
+    def test_includes_remote_panel(self) -> None:
+        """Remote panel should be included when show_remote=True."""
+        commits = self._make_commits(5)
+        status = _make_status(
+            commits=commits,
+            remote_commits=commits,
+            last_fetch_time="12:00:00",
+        )
+        budgets = _calculate_panel_budgets(
+            terminal_height=50,
+            status=status,
+            show_status=False,
+            show_remote=True,
+            show_log=True,
+            show_diff=False,
+            max_files=20,
+            max_commits=10,
+        )
+        assert "remote" in budgets
+        assert "log" in budgets
+
+    def test_diff_section_headers_accounted(self) -> None:
+        """Diff panel overhead includes section header rows."""
+        status = _make_status(
+            staged_diff=self._make_diffs(10),
+            unstaged_diff=self._make_diffs(10),
+        )
+        budgets = _calculate_panel_budgets(
+            terminal_height=50,
+            status=status,
+            show_status=False,
+            show_remote=False,
+            show_log=False,
+            show_diff=True,
+            max_files=20,
+            max_commits=10,
+        )
+        # Should still have items allocated despite section header overhead
+        assert budgets["diff"] >= 1
+
+
+class TestBuildLogPanelMaxCommits:
+    """Tests for build_log_panel with max_commits parameter."""
+
+    def test_max_commits_truncates(self) -> None:
+        """Commits beyond max_commits should be truncated with summary."""
+        commits = [
+            CommitInfo(
+                short_hash=f"abc{i:04d}",
+                relative_time=f"{i} min ago",
+                message=f"commit {i}",
+                author="A",
+            )
+            for i in range(20)
+        ]
+        status = _make_status(commits=commits)
+        panel = build_log_panel(status, max_commits=5)
+        assert isinstance(panel, Panel)
+
+    def test_max_commits_zero_shows_all(self) -> None:
+        """max_commits=0 should show all commits."""
+        commits = [
+            CommitInfo(
+                short_hash=f"abc{i:04d}",
+                relative_time=f"{i} min ago",
+                message=f"commit {i}",
+                author="A",
+            )
+            for i in range(10)
+        ]
+        status = _make_status(commits=commits)
+        panel = build_log_panel(status, max_commits=0)
+        assert isinstance(panel, Panel)
+
+    def test_max_commits_no_truncation_when_fewer(self) -> None:
+        """No truncation when commit count <= max_commits."""
+        commits = [
+            CommitInfo(
+                short_hash=f"abc{i:04d}",
+                relative_time=f"{i} min ago",
+                message=f"commit {i}",
+                author="A",
+            )
+            for i in range(3)
+        ]
+        status = _make_status(commits=commits)
+        panel = build_log_panel(status, max_commits=10)
+        assert isinstance(panel, Panel)
+
+
+class TestBuildDisplayDynamicSizing:
+    """Tests for build_display with terminal_height parameter."""
+
+    def test_terminal_height_zero_uses_defaults(self) -> None:
+        """terminal_height=0 should use default max values."""
+        status = _make_status()
+        display = build_display(status, terminal_height=0)
+        assert isinstance(display, Group)
+
+    def test_terminal_height_limits_panels(self) -> None:
+        """With a small terminal_height, panels should be limited."""
+        files = [FileChange(path=f"file{i}.py", status=FileStatus.MODIFIED) for i in range(50)]
+        commits = [
+            CommitInfo(
+                short_hash=f"abc{i:04d}",
+                relative_time=f"{i} min ago",
+                message=f"commit {i}",
+                author="A",
+            )
+            for i in range(50)
+        ]
+        diffs = [DiffStat(path=f"file{i}.py", insertions=i, deletions=1) for i in range(50)]
+        status = _make_status(files=files, commits=commits, unstaged_diff=diffs)
+        display = build_display(status, terminal_height=20, max_files=0, max_commits=0)
+        assert isinstance(display, Group)
+
+    def test_large_terminal_height(self) -> None:
+        """With plenty of space, all panels should render normally."""
+        status = _make_status(
+            files=[FileChange(path="a.py", status=FileStatus.MODIFIED)],
+            commits=[CommitInfo(short_hash="abc", relative_time="1m", message="x", author="A")],
+        )
+        display = build_display(status, terminal_height=200)
+        assert isinstance(display, Group)

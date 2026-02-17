@@ -544,11 +544,12 @@ def build_status_panel(status: GitStatus, max_files: int = 20) -> Panel:
     return Panel(table, title="Files", subtitle=subtitle, border_style="green")
 
 
-def build_log_panel(status: GitStatus) -> Panel:
+def build_log_panel(status: GitStatus, max_commits: int = 0) -> Panel:
     """Build a Rich panel showing recent commits.
 
     Args:
         status: Collected git status data.
+        max_commits: Maximum number of commits to display. 0 for unlimited.
 
     Returns:
         Panel with a list of recent commits.
@@ -560,8 +561,12 @@ def build_log_panel(status: GitStatus) -> Panel:
             border_style="yellow",
         )
 
+    total = len(status.commits)
+    display_limit = min(total, max_commits) if max_commits > 0 else total
+    display_commits = status.commits[:display_limit]
+
     text = Text()
-    for i, commit in enumerate(status.commits):
+    for i, commit in enumerate(display_commits):
         if i > 0:
             text.append("\n")
         text.append(commit.short_hash, style="cyan")
@@ -572,6 +577,11 @@ def build_log_panel(status: GitStatus) -> Panel:
         text.append(", ", style="dim")
         text.append(commit.relative_time, style="dim")
         text.append(")", style="dim")
+
+    hidden = total - len(display_commits)
+    if hidden > 0:
+        text.append("\n")
+        text.append(f"... and {hidden} more commits", style="dim italic")
 
     return Panel(text, title="Recent Commits", border_style="yellow")
 
@@ -691,6 +701,124 @@ def build_remote_panel(status: GitStatus, max_commits: int = 10) -> Panel:
     return Panel(text, title="Remote Commits", subtitle=subtitle, border_style="magenta")
 
 
+def _estimate_branch_height(status: GitStatus) -> int:
+    """Estimate terminal rows consumed by the branch panel.
+
+    Args:
+        status: Collected git status data.
+
+    Returns:
+        Estimated height in terminal rows (content + borders).
+    """
+    lines = 1  # Branch name line is always present
+    if status.stash_count > 0:
+        lines += 1
+    if status.last_commit_hash:
+        lines += 1
+    return lines + 2  # +2 for top/bottom panel borders
+
+
+def _calculate_panel_budgets(
+    terminal_height: int,
+    status: GitStatus,
+    show_status: bool,
+    show_remote: bool,
+    show_log: bool,
+    show_diff: bool,
+    max_files: int,
+    max_commits: int,
+    header_rows: int = 2,
+) -> dict[str, int]:
+    """Calculate item limits for each panel based on available terminal rows.
+
+    Distributes available space proportionally among enabled panels, ensuring
+    each panel gets at least 1 content row and no single panel hogs all space.
+
+    Args:
+        terminal_height: Total terminal rows available.
+        status: Collected git status data.
+        show_status: Whether files panel is shown.
+        show_remote: Whether remote commits panel is shown.
+        show_log: Whether recent commits panel is shown.
+        show_diff: Whether diff stats panel is shown.
+        max_files: User-specified max files (upper bound).
+        max_commits: User-specified max commits (upper bound).
+        header_rows: Rows consumed by the header above the Live display.
+
+    Returns:
+        Dict mapping panel name to allocated item count.
+    """
+    branch_height = _estimate_branch_height(status)
+    available = terminal_height - header_rows - branch_height
+
+    # Collect info: (name, capped_natural_items, overhead_rows)
+    # overhead = border rows (2) + section headers for diff panel
+    panel_info: list[tuple[str, int, int]] = []
+
+    if show_status:
+        n = len(status.files)
+        cap = min(n, max_files) if max_files > 0 else n
+        panel_info.append(("status", max(cap, 1), 2))
+
+    if show_remote:
+        n = len(status.remote_commits)
+        cap = min(n, max_commits) if max_commits > 0 else n
+        panel_info.append(("remote", max(cap, 1), 2))
+
+    if show_log:
+        n = len(status.commits)
+        cap = min(n, max_commits) if max_commits > 0 else n
+        panel_info.append(("log", max(cap, 1), 2))
+
+    if show_diff:
+        n = len(status.staged_diff) + len(status.unstaged_diff)
+        cap = min(n, max_files) if max_files > 0 else n
+        section_headers = (1 if status.staged_diff else 0) + (1 if status.unstaged_diff else 0)
+        panel_info.append(("diff", max(cap, 1), 2 + section_headers))
+
+    if not panel_info:
+        return {}
+
+    # Subtract per-panel overhead from available space to get content budget
+    total_overhead = sum(overhead for _, _, overhead in panel_info)
+    content_budget = max(len(panel_info), available - total_overhead)
+
+    total_natural = sum(n for _, n, _ in panel_info)
+
+    if content_budget >= total_natural:
+        # Enough room for everything at natural sizes
+        return {name: n for name, n, _ in panel_info}
+
+    # Distribute proportionally with minimum of 1 per panel
+    result: dict[str, int] = {}
+    for name, natural, _ in panel_info:
+        share = max(1, round(content_budget * natural / total_natural)) if total_natural > 0 else 1
+        result[name] = min(share, natural)
+
+    # Fix over/under allocation from rounding
+    allocated = sum(result.values())
+    if allocated > content_budget:
+        excess = allocated - content_budget
+        for name, _ in sorted(result.items(), key=lambda x: x[1], reverse=True):
+            if excess <= 0:
+                break
+            reduce = min(result[name] - 1, excess)
+            result[name] -= reduce
+            excess -= reduce
+    elif allocated < content_budget:
+        deficit = content_budget - allocated
+        for name, natural, _ in panel_info:
+            if deficit <= 0:
+                break
+            can_add = natural - result[name]
+            add = min(can_add, deficit)
+            if add > 0:
+                result[name] += add
+                deficit -= add
+
+    return result
+
+
 def build_display(
     status: GitStatus,
     show_log: bool = True,
@@ -699,6 +827,7 @@ def build_display(
     show_remote: bool = False,
     max_files: int = 20,
     max_commits: int = 10,
+    terminal_height: int = 0,
 ) -> Group:
     """Compose git status panels into a Rich Group.
 
@@ -710,23 +839,45 @@ def build_display(
         show_remote: Whether to include the remote commits panel.
         max_files: Maximum number of files to display. 0 for unlimited.
         max_commits: Maximum number of commits per panel. 0 for unlimited.
+        terminal_height: Terminal height for dynamic sizing. 0 to disable.
 
     Returns:
         Group of Rich panels for display.
     """
+    if terminal_height > 0:
+        budgets = _calculate_panel_budgets(
+            terminal_height,
+            status,
+            show_status,
+            show_remote,
+            show_log,
+            show_diff,
+            max_files,
+            max_commits,
+        )
+        status_max = budgets.get("status", max_files)
+        remote_max = budgets.get("remote", max_commits)
+        log_max = budgets.get("log", max_commits)
+        diff_max = budgets.get("diff", max_files)
+    else:
+        status_max = max_files
+        remote_max = max_commits
+        log_max = max_commits
+        diff_max = max_files
+
     panels: list[Panel] = [build_branch_panel(status)]
 
     if show_status:
-        panels.append(build_status_panel(status, max_files=max_files))
+        panels.append(build_status_panel(status, max_files=status_max))
 
     if show_remote:
-        panels.append(build_remote_panel(status, max_commits=max_commits))
+        panels.append(build_remote_panel(status, max_commits=remote_max))
 
     if show_log:
-        panels.append(build_log_panel(status))
+        panels.append(build_log_panel(status, max_commits=log_max))
 
     if show_diff:
-        panels.append(build_diff_panel(status, max_files=max_files))
+        panels.append(build_diff_panel(status, max_files=diff_max))
 
     return Group(*panels)
 
@@ -799,6 +950,8 @@ def run_git_monitor(
             status.remote_commits = remote_commits
             status.last_fetch_time = last_fetch_display
 
+        header_rows = 2 if fetch_enabled else 1
+
         display = build_display(
             status,
             show_log=show_log,
@@ -807,6 +960,7 @@ def run_git_monitor(
             show_remote=fetch_enabled,
             max_files=max_files,
             max_commits=max_commits,
+            terminal_height=console.height - header_rows,
         )
 
         with Live(display, console=console, refresh_per_second=1) as live:
@@ -830,6 +984,7 @@ def run_git_monitor(
                         show_remote=fetch_enabled,
                         max_files=max_files,
                         max_commits=max_commits,
+                        terminal_height=console.height - header_rows,
                     )
                 )
     except KeyboardInterrupt:

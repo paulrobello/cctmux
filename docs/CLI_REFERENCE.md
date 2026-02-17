@@ -296,6 +296,7 @@ cctmux-tasks -i 0.5
 - **Status Indicators**: `○` pending, `◐` in progress, `●` completed
 - **Progress Stats**: Total tasks, status counts, completion percentage
 - **Acceptance Criteria**: `[completed/total pct%]` when present in metadata
+- **Dynamic Sizing**: In stats-only mode (`-s`), window info is hidden since no graph or table is displayed
 
 ## cctmux-session
 
@@ -439,6 +440,7 @@ cctmux-agents -i 0.5
 - **Agent Table**: Name, model, duration, tokens, top tools, current activity
 - **Activity Panel**: Recent activities across all agents with timestamps
 - **Status Indicators**: `○` unknown, `◐` active, `●` completed
+- **Dynamic Sizing**: Panels adapt to terminal height, distributing rows proportionally between the agent table and activity panel
 
 ## cctmux-activity
 
@@ -496,6 +498,7 @@ cctmux-activity --preset minimal
 - **Activity Heatmap**: ASCII visualization of daily activity
 - **Model Usage Table**: Token breakdown by model with cost estimates
 - **Hourly Distribution**: Bar chart of activity by hour (optional)
+- **Dynamic Sizing**: Panels adapt to terminal height, distributing rows proportionally between the heatmap and model usage table
 
 ## cctmux-git
 
@@ -570,6 +573,7 @@ cctmux-git -i 0.5
 - **Remote Commits Panel**: Commits on the remote not yet in the local branch, with last fetch timestamp (shown when `--fetch` is enabled)
 - **Recent Commits Panel**: Commit hash, message, author, and relative timestamp
 - **Diff Stats Panel**: Per-file insertion/deletion counts with visual bars
+- **Dynamic Sizing**: Panels adapt to terminal height, distributing rows proportionally so no single panel dominates the display
 
 ## cctmux-ralph
 
@@ -687,6 +691,7 @@ cctmux-ralph cancel
 - **Timeline**: Visual progress of iterations over time
 - **Task Progress**: Checklist completion tracking
 - **Prompt Preview**: Current iteration prompt (optional, shown with verbose/debug presets)
+- **Dynamic Sizing**: Panels adapt to terminal height, distributing rows proportionally between task progress and iteration table
 
 ## Common Patterns
 

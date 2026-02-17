@@ -172,7 +172,11 @@ def build_ralph_status_panel(state: RalphState) -> Panel:
     return Panel(text, title="Ralph Loop", border_style="blue")
 
 
-def build_task_progress_panel(state: RalphState, project_file: Path | None = None) -> Panel:
+def build_task_progress_panel(
+    state: RalphState,
+    project_file: Path | None = None,
+    max_tasks: int = 0,
+) -> Panel:
     """Show the task checklist from the project file.
 
     Reads the actual project file to show current task states.
@@ -181,6 +185,7 @@ def build_task_progress_panel(state: RalphState, project_file: Path | None = Non
     Args:
         state: Current Ralph state.
         project_file: Path to project file (falls back to state.project_file).
+        max_tasks: Maximum number of tasks to display. 0 for unlimited.
 
     Returns:
         Rich Panel with task checklist.
@@ -194,19 +199,28 @@ def build_task_progress_panel(state: RalphState, project_file: Path | None = Non
 
     content = file_path.read_text(encoding="utf-8")
     task_count = 0
+    displayed = 0
 
     for line in content.splitlines():
         stripped = line.strip()
         if stripped.startswith("- [x]") or stripped.startswith("- [X]"):
             task_count += 1
-            task_text = stripped[5:].strip()
-            text.append("● ", style="green")
-            text.append(f"{task_text}\n", style="green")
+            if max_tasks == 0 or displayed < max_tasks:
+                task_text = stripped[5:].strip()
+                text.append("● ", style="green")
+                text.append(f"{task_text}\n", style="green")
+                displayed += 1
         elif stripped.startswith("- [ ]"):
             task_count += 1
-            task_text = stripped[5:].strip()
-            text.append("○ ", style="yellow")
-            text.append(f"{task_text}\n", style="yellow")
+            if max_tasks == 0 or displayed < max_tasks:
+                task_text = stripped[5:].strip()
+                text.append("○ ", style="yellow")
+                text.append(f"{task_text}\n", style="yellow")
+                displayed += 1
+
+    hidden = task_count - displayed
+    if hidden > 0:
+        text.append(f"... and {hidden} more tasks\n", style="dim italic")
 
     if task_count == 0:
         text.append("No checklist items found", style="dim")
@@ -339,10 +353,32 @@ def build_iteration_table(state: RalphState, max_visible: int = 20) -> Panel:
     return Panel(table, title="Iterations", border_style="yellow")
 
 
+def _count_task_lines(project_file: Path | None, state: RalphState) -> int:
+    """Count the number of checklist items in the project file.
+
+    Args:
+        project_file: Path to project file.
+        state: Ralph state (for fallback project_file path).
+
+    Returns:
+        Number of task lines, or 1 if no file or no tasks.
+    """
+    file_path = project_file or (Path(state.project_file) if state.project_file else None)
+    if not file_path or not file_path.exists():
+        return 1
+    try:
+        content = file_path.read_text(encoding="utf-8")
+        count = sum(1 for line in content.splitlines() if line.strip().startswith("- ["))
+        return max(count, 1)
+    except OSError:
+        return 1
+
+
 def build_ralph_display(
     state: RalphState | None,
     config: RalphMonitorConfig,
     project_file: Path | None = None,
+    terminal_height: int = 0,
 ) -> Group:
     """Assemble all Ralph monitor panels.
 
@@ -350,6 +386,7 @@ def build_ralph_display(
         state: Current Ralph state (None if no state file).
         config: Monitor display configuration.
         project_file: Path to project file.
+        terminal_height: Terminal height for dynamic sizing. 0 to disable.
 
     Returns:
         Rich Group with all panels.
@@ -365,12 +402,53 @@ def build_ralph_display(
         panels.append(Panel(text, title="Ralph Loop", border_style="dim"))
         return Group(*panels)
 
+    # Calculate dynamic limits for variable panels
+    effective_max_tasks = 0  # 0 = unlimited
+    effective_max_iterations = config.max_iterations_visible
+
+    if terminal_height > 0:
+        # Status panel: ~5 content lines + 2 borders = 7
+        status_height = 7
+        # Timeline panel: 2 content lines + 2 borders = 4 (if shown)
+        timeline_height = 4 if config.show_timeline and state.iterations else 0
+        available = terminal_height - status_height - timeline_height
+
+        # Variable panels: task progress and iteration table
+        task_overhead = 2  # panel borders
+        iter_overhead = 3  # panel borders + table header (box=None but still has row)
+
+        show_tasks = config.show_task_progress
+        show_iter = config.show_table
+
+        if show_tasks and show_iter:
+            natural_tasks = _count_task_lines(project_file, state)
+            natural_iters = min(len(state.iterations), config.max_iterations_visible)
+            natural_iters = max(natural_iters, 1)
+            total_natural = natural_tasks + natural_iters
+            content_budget = max(2, available - task_overhead - iter_overhead)
+
+            if content_budget >= total_natural:
+                effective_max_tasks = natural_tasks
+                effective_max_iterations = natural_iters
+            else:
+                task_share = max(1, round(content_budget * natural_tasks / total_natural))
+                iter_share = max(1, content_budget - task_share)
+                effective_max_tasks = min(task_share, natural_tasks)
+                effective_max_iterations = min(iter_share, natural_iters)
+        elif show_tasks:
+            content_budget = max(1, available - task_overhead)
+            effective_max_tasks = content_budget
+        elif show_iter:
+            content_budget = max(1, available - iter_overhead)
+            natural_iters = min(len(state.iterations), config.max_iterations_visible)
+            effective_max_iterations = min(max(natural_iters, 1), content_budget)
+
     # Always show status panel
     panels.append(build_ralph_status_panel(state))
 
     # Task progress panel
     if config.show_task_progress:
-        panels.append(build_task_progress_panel(state, project_file))
+        panels.append(build_task_progress_panel(state, project_file, max_tasks=effective_max_tasks))
 
     # Timeline
     if config.show_timeline and state.iterations:
@@ -378,7 +456,7 @@ def build_ralph_display(
 
     # Iteration table
     if config.show_table:
-        panels.append(build_iteration_table(state, config.max_iterations_visible))
+        panels.append(build_iteration_table(state, effective_max_iterations))
 
     return Group(*panels)
 
@@ -426,8 +504,10 @@ def run_ralph_monitor(
         state = load_ralph_state(proj_path)
         project_file = _get_project_file(state)
 
+        header_rows = 3  # title + project path + blank line
+
         with Live(
-            build_ralph_display(state, config, project_file),
+            build_ralph_display(state, config, project_file, terminal_height=console.height - header_rows),
             console=console,
             refresh_per_second=1,
         ) as live:
@@ -459,7 +539,14 @@ def run_ralph_monitor(
                         pass
 
                 if changed:
-                    live.update(build_ralph_display(state, config, project_file))
+                    live.update(
+                        build_ralph_display(
+                            state,
+                            config,
+                            project_file,
+                            terminal_height=console.height - header_rows,
+                        )
+                    )
 
     except KeyboardInterrupt:
         console.print("\n[dim]Monitor stopped.[/]")

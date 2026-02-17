@@ -893,8 +893,11 @@ def build_display(
     # Calculate window
     window = calculate_task_window(tasks, max_visible)
 
+    # Only show window info in stats if graph or table is visible
+    stats_window = window if show_graph or show_table else None
+
     components = [
-        Panel(build_stats(tasks, session_name, window, skipped_files=skipped_files), border_style="blue"),
+        Panel(build_stats(tasks, session_name, stats_window, skipped_files=skipped_files), border_style="blue"),
     ]
 
     if show_graph:

@@ -161,7 +161,7 @@ cctmux provides seven CLI commands:
 | `cctmux-agents` | Monitor subagent activity |
 | `cctmux-activity` | Display usage statistics dashboard |
 | `cctmux-git` | Monitor git repository status in real-time |
-| `cctmux-ralph` | Ralph Loop automation (start, monitor, cancel, status, init) |
+| `cctmux-ralph` | Ralph Loop automation (start, monitor, stop, cancel, status, init) |
 
 ### cctmux
 
@@ -337,7 +337,8 @@ cctmux-ralph                          # Monitor a running Ralph Loop
 cctmux-ralph start ralph-project.md   # Start a Ralph Loop from project file
 cctmux-ralph init                     # Create a template project file
 cctmux-ralph status                   # Show current Ralph Loop status
-cctmux-ralph cancel                   # Cancel an active Ralph Loop
+cctmux-ralph stop                     # Stop after current iteration finishes
+cctmux-ralph cancel                   # Cancel an active Ralph Loop immediately
 ```
 
 **Features:**
@@ -345,6 +346,9 @@ cctmux-ralph cancel                   # Cancel an active Ralph Loop
 - Token usage and cost estimates per iteration
 - Timeline visualization of loop progress
 - Completion detection via task checks, promise tags, or max iterations
+- Graceful stop after current iteration or immediate cancellation
+- Per-iteration timeout support (`--timeout`)
+- Yolo mode (`--yolo`) to skip all permission checks
 
 ## Configuration
 

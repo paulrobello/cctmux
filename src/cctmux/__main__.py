@@ -995,7 +995,7 @@ def ralph_main(
 
 
 @ralph_app.command()
-def ralph_start(
+def start(
     project_file: Annotated[
         Path,
         typer.Argument(help="Path to the Ralph project markdown file."),
@@ -1024,6 +1024,14 @@ def ralph_start(
         Path | None,
         typer.Option("--project", "-p", help="Project root directory."),
     ] = None,
+    timeout: Annotated[
+        int,
+        typer.Option("--timeout", "-t", help="Max seconds per iteration (0 = no timeout)."),
+    ] = 0,
+    yolo: Annotated[
+        bool,
+        typer.Option("--yolo", "-y", help="Use --dangerously-skip-permissions for claude invocations."),
+    ] = False,
 ) -> None:
     """Start a Ralph Loop from a project file. Runs in foreground."""
     from cctmux.ralph_runner import run_ralph_loop
@@ -1040,11 +1048,13 @@ def ralph_start(
         model=model,
         max_budget_usd=max_budget,
         project_path=project,
+        iteration_timeout=timeout,
+        yolo=yolo,
     )
 
 
 @ralph_app.command()
-def ralph_init(
+def init(
     output: Annotated[
         Path,
         typer.Option("--output", "-o", help="Output file path."),
@@ -1066,13 +1076,31 @@ def ralph_init(
 
 
 @ralph_app.command()
-def ralph_cancel(
+def stop(
     project: Annotated[
         Path | None,
         typer.Option("--project", "-p", help="Project root directory."),
     ] = None,
 ) -> None:
-    """Cancel the active Ralph Loop."""
+    """Stop the Ralph Loop after the current iteration finishes."""
+    from cctmux.ralph_runner import stop_ralph_loop
+
+    proj_path = (project or Path.cwd()).resolve()
+    if stop_ralph_loop(proj_path):
+        console.print("[green]✓[/] Ralph Loop will stop after the current iteration.")
+    else:
+        err_console.print("[yellow]No active Ralph Loop found.[/]")
+        raise typer.Exit(1)
+
+
+@ralph_app.command()
+def cancel(
+    project: Annotated[
+        Path | None,
+        typer.Option("--project", "-p", help="Project root directory."),
+    ] = None,
+) -> None:
+    """Cancel the active Ralph Loop immediately."""
     from cctmux.ralph_runner import cancel_ralph_loop
 
     proj_path = (project or Path.cwd()).resolve()
@@ -1084,7 +1112,7 @@ def ralph_cancel(
 
 
 @ralph_app.command()
-def ralph_status(
+def status(
     project: Annotated[
         Path | None,
         typer.Option("--project", "-p", help="Project root directory."),
@@ -1102,6 +1130,7 @@ def ralph_status(
 
     status_colors = {
         RalphStatus.ACTIVE: "yellow",
+        RalphStatus.STOPPING: "magenta",
         RalphStatus.COMPLETED: "green",
         RalphStatus.CANCELLED: "red",
         RalphStatus.MAX_REACHED: "cyan",

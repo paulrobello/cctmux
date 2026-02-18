@@ -1,10 +1,10 @@
 """Tests for ralph_runner module."""
 
+import io
 import json
-import subprocess
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -24,6 +24,31 @@ from cctmux.ralph_runner import (
     run_ralph_loop,
     save_ralph_state,
 )
+
+
+def _make_mock_popen(
+    stdout: str = "",
+    stderr: str = "",
+    returncode: int = 0,
+    side_effect: Any = None,
+) -> MagicMock:
+    """Create a mock Popen object that works with the threaded reader pattern.
+
+    The mock simulates:
+    - proc.stdout / proc.stderr as StringIO objects for thread reading
+    - proc.poll() returning None once then the returncode (process finishes fast)
+    - proc.returncode accessible after poll() returns non-None
+    - proc.kill() as a no-op
+    """
+    mock_proc = MagicMock()
+    mock_proc.stdout = io.StringIO(stdout)
+    mock_proc.stderr = io.StringIO(stderr)
+    mock_proc.returncode = returncode
+    # poll() returns None once (one loop iteration), then returncode
+    mock_proc.poll.side_effect = [None, returncode]
+    mock_proc.kill.return_value = None
+
+    return MagicMock(side_effect=side_effect) if side_effect else MagicMock(return_value=mock_proc)
 
 
 class TestParseTaskProgress:
@@ -188,6 +213,32 @@ class TestBuildClaudeCommand:
         )
         assert "--max-budget-usd" not in cmd
 
+    def test_yolo_uses_dangerously_skip_permissions(self) -> None:
+        """Test that yolo=True uses --dangerously-skip-permissions instead of --permission-mode."""
+        cmd = build_claude_command(
+            prompt="Hello",
+            system_prompt_addition="Inst",
+            permission_mode="acceptEdits",
+            model=None,
+            max_budget_usd=None,
+            yolo=True,
+        )
+        assert "--dangerously-skip-permissions" in cmd
+        assert "--permission-mode" not in cmd
+
+    def test_no_yolo_uses_permission_mode(self) -> None:
+        """Test that yolo=False uses --permission-mode normally."""
+        cmd = build_claude_command(
+            prompt="Hello",
+            system_prompt_addition="Inst",
+            permission_mode="acceptEdits",
+            model=None,
+            max_budget_usd=None,
+            yolo=False,
+        )
+        assert "--permission-mode" in cmd
+        assert "--dangerously-skip-permissions" not in cmd
+
 
 class TestBuildSystemPrompt:
     """Tests for system prompt generation."""
@@ -240,17 +291,19 @@ class TestBuildSystemPrompt:
 class TestParseClaudeJsonOutput:
     """Tests for JSON output parsing."""
 
-    def test_valid_json(self) -> None:
-        """Test parsing valid Claude JSON output."""
+    def test_valid_json_current_format(self) -> None:
+        """Test parsing current Claude JSON output with nested usage dict."""
         data = {
             "result": "I completed the task.",
             "model": "claude-sonnet-4-5-20250929",
-            "cost_usd": 1.23,
-            "input_tokens": 5000,
-            "output_tokens": 2000,
-            "cache_read_tokens": 100,
-            "cache_creation_tokens": 50,
+            "total_cost_usd": 1.23,
             "num_turns": 8,
+            "usage": {
+                "input_tokens": 5000,
+                "output_tokens": 2000,
+                "cache_read_input_tokens": 100,
+                "cache_creation_input_tokens": 50,
+            },
         }
         parsed = parse_claude_json_output(json.dumps(data))
         assert parsed["result_text"] == "I completed the task."
@@ -261,6 +314,24 @@ class TestParseClaudeJsonOutput:
         assert parsed["cache_read_tokens"] == 100
         assert parsed["cache_creation_tokens"] == 50
         assert parsed["tool_calls"] == 8
+
+    def test_valid_json_legacy_format(self) -> None:
+        """Test parsing legacy Claude JSON output with top-level token fields."""
+        data = {
+            "result": "Done.",
+            "model": "claude-sonnet-4-5-20250929",
+            "cost_usd": 0.50,
+            "input_tokens": 3000,
+            "output_tokens": 1000,
+            "cache_read_tokens": 0,
+            "cache_creation_tokens": 0,
+            "num_turns": 3,
+        }
+        parsed = parse_claude_json_output(json.dumps(data))
+        assert parsed["cost_usd"] == 0.50
+        assert parsed["input_tokens"] == 3000
+        assert parsed["output_tokens"] == 1000
+        assert parsed["tool_calls"] == 3
 
     def test_invalid_json(self) -> None:
         """Test parsing invalid JSON output."""
@@ -642,9 +713,10 @@ class TestRunRalphLoop:
         project = tmp_path / "project.md"
         project.write_text("- [x] Task 1\n- [x] Task 2\n- [x] Task 3\n", encoding="utf-8")
 
-        with patch("cctmux.ralph_runner.subprocess.run") as mock_run:
+        mock_popen = _make_mock_popen()
+        with patch("cctmux.ralph_runner.subprocess.Popen", mock_popen):
             run_ralph_loop(project_file=project, project_path=tmp_path)
-            mock_run.assert_not_called()
+            mock_popen.assert_not_called()
 
         state = load_ralph_state(tmp_path)
         assert state is not None
@@ -656,15 +728,10 @@ class TestRunRalphLoop:
         project = tmp_path / "project.md"
         project.write_text("- [ ] Task 1\n- [ ] Task 2\n", encoding="utf-8")
 
-        mock_result = subprocess.CompletedProcess(
-            args=["claude"],
-            returncode=0,
-            stdout=_mock_claude_output(),
-            stderr="",
-        )
+        mock_popen = _make_mock_popen(stdout=_mock_claude_output())
 
         with (
-            patch("cctmux.ralph_runner.subprocess.run", return_value=mock_result),
+            patch("cctmux.ralph_runner.subprocess.Popen", mock_popen),
             patch("cctmux.ralph_runner.time.sleep"),
         ):
             run_ralph_loop(
@@ -683,15 +750,12 @@ class TestRunRalphLoop:
         project = tmp_path / "project.md"
         project.write_text("- [ ] Task 1\n", encoding="utf-8")
 
-        mock_result = subprocess.CompletedProcess(
-            args=["claude"],
-            returncode=0,
+        mock_popen = _make_mock_popen(
             stdout=_mock_claude_output(result="Done! <promise>All tests passing</promise>"),
-            stderr="",
         )
 
         with (
-            patch("cctmux.ralph_runner.subprocess.run", return_value=mock_result),
+            patch("cctmux.ralph_runner.subprocess.Popen", mock_popen),
             patch("cctmux.ralph_runner.time.sleep"),
         ):
             run_ralph_loop(
@@ -710,15 +774,14 @@ class TestRunRalphLoop:
         project = tmp_path / "project.md"
         project.write_text("- [ ] Task 1\n", encoding="utf-8")
 
-        mock_result = subprocess.CompletedProcess(
-            args=["claude"],
-            returncode=1,
+        mock_popen = _make_mock_popen(
             stdout=_mock_claude_output(),
             stderr="some error",
+            returncode=1,
         )
 
         with (
-            patch("cctmux.ralph_runner.subprocess.run", return_value=mock_result),
+            patch("cctmux.ralph_runner.subprocess.Popen", mock_popen),
             patch("cctmux.ralph_runner.time.sleep"),
         ):
             run_ralph_loop(project_file=project, project_path=tmp_path)
@@ -729,12 +792,14 @@ class TestRunRalphLoop:
         assert len(state.iterations) == 1
 
     def test_subprocess_exception(self, tmp_path: Path) -> None:
-        """Test that subprocess.run raising an exception results in ERROR."""
+        """Test that subprocess.Popen raising an exception results in ERROR."""
         project = tmp_path / "project.md"
         project.write_text("- [ ] Task 1\n", encoding="utf-8")
 
+        mock_popen = _make_mock_popen(side_effect=OSError("command not found"))
+
         with (
-            patch("cctmux.ralph_runner.subprocess.run", side_effect=OSError("command not found")),
+            patch("cctmux.ralph_runner.subprocess.Popen", mock_popen),
             patch("cctmux.ralph_runner.time.sleep"),
         ):
             run_ralph_loop(project_file=project, project_path=tmp_path)
@@ -748,12 +813,7 @@ class TestRunRalphLoop:
         project = tmp_path / "project.md"
         project.write_text("- [ ] Task 1\n- [ ] Task 2\n", encoding="utf-8")
 
-        mock_result = subprocess.CompletedProcess(
-            args=["claude"],
-            returncode=0,
-            stdout=_mock_claude_output(),
-            stderr="",
-        )
+        mock_popen = _make_mock_popen(stdout=_mock_claude_output())
 
         def mock_sleep(_seconds: float) -> None:
             # Between iteration 1 and 2, simulate external cancel
@@ -763,7 +823,7 @@ class TestRunRalphLoop:
                 save_ralph_state(st, tmp_path)
 
         with (
-            patch("cctmux.ralph_runner.subprocess.run", return_value=mock_result),
+            patch("cctmux.ralph_runner.subprocess.Popen", mock_popen),
             patch("cctmux.ralph_runner.time.sleep", side_effect=mock_sleep),
         ):
             run_ralph_loop(project_file=project, project_path=tmp_path)
@@ -788,20 +848,22 @@ class TestRunRalphLoop:
                 captured_handler = handler
             return original_signal(signum, handler)
 
-        def mock_subprocess_run(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
-            # Simulate Ctrl+C during first iteration
+        def mock_popen_constructor(*args: Any, **kwargs: Any) -> MagicMock:
+            # Simulate Ctrl+C during first iteration by triggering handler
             if captured_handler is not None:
                 captured_handler(2, None)
-            return subprocess.CompletedProcess(
-                args=["claude"],
-                returncode=0,
-                stdout=_mock_claude_output(),
-                stderr="",
-            )
+            mock_proc = MagicMock()
+            mock_proc.stdout = io.StringIO(_mock_claude_output())
+            mock_proc.stderr = io.StringIO("")
+            mock_proc.returncode = 0
+            # poll returns None once then 0 (process finishes)
+            mock_proc.poll.side_effect = [None, 0]
+            mock_proc.kill.return_value = None
+            return mock_proc
 
         with (
             patch("cctmux.ralph_runner.signal.signal", side_effect=capture_signal),
-            patch("cctmux.ralph_runner.subprocess.run", side_effect=mock_subprocess_run),
+            patch("cctmux.ralph_runner.subprocess.Popen", side_effect=mock_popen_constructor),
             patch("cctmux.ralph_runner.time.sleep"),
         ):
             run_ralph_loop(project_file=project, project_path=tmp_path)
@@ -815,18 +877,19 @@ class TestRunRalphLoop:
         project = tmp_path / "project.md"
         project.write_text("- [ ] Task 1\n- [ ] Task 2\n", encoding="utf-8")
 
-        def mock_subprocess_run(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        def mock_popen_constructor(*args: Any, **kwargs: Any) -> MagicMock:
             # Simulate Claude completing all tasks by rewriting the file
             project.write_text("- [x] Task 1\n- [x] Task 2\n", encoding="utf-8")
-            return subprocess.CompletedProcess(
-                args=["claude"],
-                returncode=0,
-                stdout=_mock_claude_output(),
-                stderr="",
-            )
+            mock_proc = MagicMock()
+            mock_proc.stdout = io.StringIO(_mock_claude_output())
+            mock_proc.stderr = io.StringIO("")
+            mock_proc.returncode = 0
+            mock_proc.poll.side_effect = [None, 0]
+            mock_proc.kill.return_value = None
+            return mock_proc
 
         with (
-            patch("cctmux.ralph_runner.subprocess.run", side_effect=mock_subprocess_run),
+            patch("cctmux.ralph_runner.subprocess.Popen", side_effect=mock_popen_constructor),
             patch("cctmux.ralph_runner.time.sleep"),
         ):
             run_ralph_loop(project_file=project, project_path=tmp_path)
@@ -842,15 +905,22 @@ class TestRunRalphLoop:
         project = tmp_path / "project.md"
         project.write_text("- [ ] Task 1\n- [ ] Task 2\n- [ ] Task 3\n", encoding="utf-8")
 
-        mock_result = subprocess.CompletedProcess(
-            args=["claude"],
-            returncode=0,
-            stdout=_mock_claude_output(),
-            stderr="",
-        )
+        # Need a fresh mock_proc per call since poll() side_effect is consumed
+        call_count = 0
+
+        def mock_popen_constructor(*args: Any, **kwargs: Any) -> MagicMock:
+            nonlocal call_count
+            call_count += 1
+            mock_proc = MagicMock()
+            mock_proc.stdout = io.StringIO(_mock_claude_output())
+            mock_proc.stderr = io.StringIO("")
+            mock_proc.returncode = 0
+            mock_proc.poll.side_effect = [None, 0]
+            mock_proc.kill.return_value = None
+            return mock_proc
 
         with (
-            patch("cctmux.ralph_runner.subprocess.run", return_value=mock_result),
+            patch("cctmux.ralph_runner.subprocess.Popen", side_effect=mock_popen_constructor),
             patch("cctmux.ralph_runner.time.sleep"),
         ):
             run_ralph_loop(
@@ -873,15 +943,12 @@ class TestRunRalphLoop:
         project = tmp_path / "project.md"
         project.write_text("- [ ] Task 1\n", encoding="utf-8")
 
-        mock_result = subprocess.CompletedProcess(
-            args=["claude"],
-            returncode=0,
+        mock_popen = _make_mock_popen(
             stdout=_mock_claude_output(cost_usd=1.50, input_tokens=10000, output_tokens=3000),
-            stderr="",
         )
 
         with (
-            patch("cctmux.ralph_runner.subprocess.run", return_value=mock_result),
+            patch("cctmux.ralph_runner.subprocess.Popen", mock_popen),
             patch("cctmux.ralph_runner.time.sleep"),
         ):
             run_ralph_loop(

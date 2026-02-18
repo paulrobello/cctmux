@@ -4,6 +4,26 @@ All notable changes to cctmux will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.5] - 2026-02-17
+
+### Added
+
+- **Ralph Loop Graceful Stop** (`cctmux-ralph stop`): Signal the loop to exit cleanly after the current iteration finishes, without killing the running subprocess
+- **Ralph Loop Iteration Timeout** (`--timeout`, `-t`): Maximum seconds per iteration; subprocess is killed on timeout and the loop continues to the next iteration
+- **Ralph Loop Yolo Mode** (`--yolo`, `-y`): Pass `--dangerously-skip-permissions` to claude invocations, allowing the agent to perform git operations without permission prompts
+- **Ralph Subprocess Task Discovery**: `CLAUDE_CODE_TASK_LIST_ID` is now derived from `CCTMUX_SESSION` when not explicitly set, so the task monitor can find tasks created by Ralph subprocesses
+
+### Changed
+
+- **Ralph Loop Subprocess Monitoring**: Replaced blocking `subprocess.run` with `subprocess.Popen` for real-time process monitoring, periodic state file updates (every 5s), and mid-iteration task progress tracking
+- **Ralph Monitor Dynamic Panel Sizing**: Task progress panel capped at 10 items with iterations table given priority, preventing the task list from dominating the display
+- **Ralph Monitor Active Refresh**: Display now refreshes continuously when the loop is active or stopping, ensuring the elapsed timer ticks accurately
+- **Ralph Subcommand Names**: Removed `ralph-` prefix from subcommands (`ralph-start` → `start`, `ralph-init` → `init`, etc.)
+
+### Fixed
+
+- **Ralph Token Usage Parsing**: Fixed parsing of Claude CLI JSON output which changed `cost_usd` to `total_cost_usd` and moved token counts into a nested `usage` dict
+
 ## [0.2.3] - 2026-02-16
 
 ### Fixed

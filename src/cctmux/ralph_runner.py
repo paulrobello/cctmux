@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 import re
 import signal
 import subprocess
 import tempfile
+import threading
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -27,6 +30,7 @@ class RalphStatus(StrEnum):
     ACTIVE = "active"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
+    STOPPING = "stopping"
     MAX_REACHED = "max_reached"
     ERROR = "error"
 
@@ -106,6 +110,7 @@ class RalphState(BaseModel):
     max_budget_usd: float | None = None
     started_at: str = ""
     ended_at: str | None = None
+    iteration_started_at: str | None = None
     project_file: str = ""
     tasks_total: int = 0
     tasks_completed: int = 0
@@ -195,6 +200,7 @@ def build_claude_command(
     permission_mode: str,
     model: str | None,
     max_budget_usd: float | None,
+    yolo: bool = False,
 ) -> list[str]:
     """Build the claude CLI command for one iteration.
 
@@ -204,6 +210,7 @@ def build_claude_command(
         permission_mode: Permission mode flag value.
         model: Model to use (None for default).
         max_budget_usd: Max budget per iteration (None for no limit).
+        yolo: Use --dangerously-skip-permissions instead of --permission-mode.
 
     Returns:
         Command as a list of strings.
@@ -216,9 +223,12 @@ def build_claude_command(
         system_prompt_addition,
         "--output-format",
         "json",
-        "--permission-mode",
-        permission_mode,
     ]
+
+    if yolo:
+        cmd.append("--dangerously-skip-permissions")
+    else:
+        cmd.extend(["--permission-mode", permission_mode])
 
     if model:
         cmd.extend(["--model", model])
@@ -262,12 +272,24 @@ def parse_claude_json_output(output: str) -> dict[str, Any]:
         data = cast(dict[str, Any], raw)
         result["result_text"] = str(data.get("result", ""))[:500]
         result["model"] = str(data.get("model", ""))
-        result["cost_usd"] = float(data.get("cost_usd", 0.0))
-        result["input_tokens"] = int(data.get("input_tokens", 0))
-        result["output_tokens"] = int(data.get("output_tokens", 0))
-        result["cache_read_tokens"] = int(data.get("cache_read_tokens", 0))
-        result["cache_creation_tokens"] = int(data.get("cache_creation_tokens", 0))
         result["tool_calls"] = int(data.get("num_turns", 0))
+
+        # Cost: prefer total_cost_usd (current), fall back to cost_usd (legacy)
+        result["cost_usd"] = float(data.get("total_cost_usd", 0.0) or data.get("cost_usd", 0.0))
+
+        # Token usage: prefer nested usage dict (current), fall back to top-level (legacy)
+        usage_raw = data.get("usage")
+        if isinstance(usage_raw, dict):
+            usage = cast(dict[str, Any], usage_raw)
+            result["input_tokens"] = int(usage.get("input_tokens", 0))
+            result["output_tokens"] = int(usage.get("output_tokens", 0))
+            result["cache_read_tokens"] = int(usage.get("cache_read_input_tokens", 0))
+            result["cache_creation_tokens"] = int(usage.get("cache_creation_input_tokens", 0))
+        else:
+            result["input_tokens"] = int(data.get("input_tokens", 0))
+            result["output_tokens"] = int(data.get("output_tokens", 0))
+            result["cache_read_tokens"] = int(data.get("cache_read_tokens", 0))
+            result["cache_creation_tokens"] = int(data.get("cache_creation_tokens", 0))
 
     return result
 
@@ -357,6 +379,30 @@ def cancel_ralph_loop(project_path: Path) -> bool:
     return True
 
 
+def stop_ralph_loop(project_path: Path) -> bool:
+    """Signal the loop to stop after the current iteration finishes.
+
+    Unlike cancel, this does NOT kill the running subprocess. It sets
+    the status to 'stopping' so the loop exits cleanly between iterations.
+
+    Args:
+        project_path: Project root directory.
+
+    Returns:
+        True if state was updated, False if no active loop.
+    """
+    state = load_ralph_state(project_path)
+    if state is None:
+        return False
+
+    if state.status != RalphStatus.ACTIVE:
+        return False
+
+    state.status = RalphStatus.STOPPING
+    save_ralph_state(state, project_path)
+    return True
+
+
 def init_project_file(output_path: Path, name: str = "") -> None:
     """Generate a template Ralph project file.
 
@@ -381,6 +427,42 @@ Additional context, constraints, or preferences for Claude.
     output_path.write_text(content, encoding="utf-8")
 
 
+def _build_subprocess_env() -> dict[str, str]:
+    """Build environment dict for the claude subprocess.
+
+    Inherits the current environment and ensures CLAUDE_CODE_TASK_LIST_ID
+    is set so the subprocess writes tasks to the same folder the task
+    monitor watches.
+
+    If CLAUDE_CODE_TASK_LIST_ID is not already set, it is derived from
+    CCTMUX_SESSION (the sanitized project folder name), matching what
+    cctmux would set with --task-list-id.
+
+    Returns:
+        Environment dict for subprocess.
+    """
+    env = os.environ.copy()
+    if "CLAUDE_CODE_TASK_LIST_ID" not in env:
+        session = env.get("CCTMUX_SESSION")
+        if session:
+            env["CLAUDE_CODE_TASK_LIST_ID"] = session
+    return env
+
+
+def _read_stream(stream: Any, target: list[str]) -> None:
+    """Read all data from a stream into a list (for use in a thread).
+
+    Args:
+        stream: File-like stream to read from.
+        target: List to append the read data to.
+    """
+    with contextlib.suppress(OSError, ValueError):
+        target.append(stream.read())
+
+
+_STATE_UPDATE_INTERVAL = 5.0  # seconds between state file updates during iteration
+
+
 def run_ralph_loop(
     project_file: Path,
     max_iterations: int = 0,
@@ -389,8 +471,14 @@ def run_ralph_loop(
     model: str | None = None,
     max_budget_usd: float | None = None,
     project_path: Path | None = None,
+    iteration_timeout: int = 0,
+    yolo: bool = False,
 ) -> None:
     """Main loop runner. Blocks until loop completes.
+
+    Uses subprocess.Popen for each iteration so the state file can be
+    updated periodically, giving the Ralph monitor real-time visibility
+    into long-running iterations.
 
     Signal handling: Ctrl+C sets state to cancelled and exits cleanly.
     Between iterations: checks state file for 'cancelled' status.
@@ -403,6 +491,8 @@ def run_ralph_loop(
         model: Claude model to use.
         max_budget_usd: Max budget per iteration.
         project_path: Project root (defaults to project_file parent).
+        iteration_timeout: Max seconds per iteration (0 = no timeout).
+        yolo: Use --dangerously-skip-permissions instead of --permission-mode.
     """
     proj_path = project_path or project_file.parent
     proj_path = proj_path.resolve()
@@ -438,6 +528,7 @@ def run_ralph_loop(
         console.print("\n[yellow]Cancelling Ralph Loop...[/]")
 
     old_handler = signal.signal(signal.SIGINT, _signal_handler)
+    env = _build_subprocess_env()
 
     try:
         iteration = 0
@@ -448,16 +539,25 @@ def run_ralph_loop(
             if max_iterations > 0 and iteration > max_iterations:
                 state.status = RalphStatus.MAX_REACHED
                 state.ended_at = datetime.now(UTC).isoformat()
+                state.iteration_started_at = None
                 save_ralph_state(state, proj_path)
                 console.print(f"[cyan]Max iterations ({max_iterations}) reached.[/]")
                 break
 
-            # Check for external cancellation
+            # Check for external cancellation or stop signal
             current_state = load_ralph_state(proj_path)
             if current_state and current_state.status == RalphStatus.CANCELLED:
                 console.print("[yellow]Loop cancelled externally.[/]")
                 state.status = RalphStatus.CANCELLED
                 state.ended_at = datetime.now(UTC).isoformat()
+                state.iteration_started_at = None
+                save_ralph_state(state, proj_path)
+                break
+            if current_state and current_state.status == RalphStatus.STOPPING:
+                console.print("[yellow]Stop requested — exiting loop.[/]")
+                state.status = RalphStatus.COMPLETED
+                state.ended_at = datetime.now(UTC).isoformat()
+                state.iteration_started_at = None
                 save_ralph_state(state, proj_path)
                 break
 
@@ -465,6 +565,7 @@ def run_ralph_loop(
             if cancelled:
                 state.status = RalphStatus.CANCELLED
                 state.ended_at = datetime.now(UTC).isoformat()
+                state.iteration_started_at = None
                 save_ralph_state(state, proj_path)
                 break
 
@@ -473,6 +574,7 @@ def run_ralph_loop(
             if tasks_before.is_all_done:
                 state.status = RalphStatus.COMPLETED
                 state.ended_at = datetime.now(UTC).isoformat()
+                state.iteration_started_at = None
                 state.tasks_total = tasks_before.total
                 state.tasks_completed = tasks_before.completed
                 save_ralph_state(state, proj_path)
@@ -495,10 +597,13 @@ def run_ralph_loop(
                 permission_mode=permission_mode,
                 model=model,
                 max_budget_usd=max_budget_usd,
+                yolo=yolo,
             )
 
             # Update state for this iteration
+            started_at = datetime.now(UTC)
             state.iteration = iteration
+            state.iteration_started_at = started_at.isoformat()
             state.tasks_total = tasks_before.total
             state.tasks_completed = tasks_before.completed
             save_ralph_state(state, proj_path)
@@ -509,23 +614,81 @@ def run_ralph_loop(
                 f"  Tasks: {tasks_before.completed}/{tasks_before.total}"
             )
 
-            # Run Claude
-            started_at = datetime.now(UTC)
+            # Run Claude with Popen for progress monitoring
             exit_code = 0
             output = ""
+            timed_out = False
+            stop_requested = False
+            stdout_parts: list[str] = []
+            stderr_parts: list[str] = []
 
             try:
-                result = subprocess.run(
+                proc = subprocess.Popen(
                     cmd,
-                    capture_output=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
                     text=True,
-                    check=False,
                     cwd=str(proj_path),
+                    env=env,
                 )
-                exit_code = result.returncode
-                output = result.stdout
-                if result.stderr:
-                    err_console.print(f"[dim]{result.stderr[:200]}[/]")
+
+                # Read stdout/stderr in background threads to avoid deadlock
+                stdout_thread = threading.Thread(target=_read_stream, args=(proc.stdout, stdout_parts), daemon=True)
+                stderr_thread = threading.Thread(target=_read_stream, args=(proc.stderr, stderr_parts), daemon=True)
+                stdout_thread.start()
+                stderr_thread.start()
+
+                # Monitor loop: poll process, update state periodically
+                last_state_update = time.monotonic()
+                while proc.poll() is None:
+                    time.sleep(1)
+
+                    # Periodic state update so the monitor sees activity
+                    now = time.monotonic()
+                    if now - last_state_update >= _STATE_UPDATE_INTERVAL:
+                        last_state_update = now
+                        # Re-read task progress to catch mid-iteration completions
+                        mid_progress = parse_task_progress(project_file)
+                        state.tasks_total = mid_progress.total
+                        state.tasks_completed = mid_progress.completed
+                        save_ralph_state(state, proj_path)
+
+                        # Check for external stop/cancel signal
+                        ext_state = load_ralph_state(proj_path)
+                        if ext_state and ext_state.status == RalphStatus.STOPPING:
+                            stop_requested = True
+                            console.print("[yellow]Stop requested — finishing current iteration...[/]")
+
+                    # Check timeout
+                    iter_elapsed = (datetime.now(UTC) - started_at).total_seconds()
+                    if iteration_timeout > 0 and iter_elapsed > iteration_timeout:
+                        timed_out = True
+                        proc.kill()
+                        break
+
+                    # Check for Ctrl+C or external cancellation
+                    if cancelled:
+                        proc.kill()
+                        break
+
+                # Wait for threads to finish reading
+                stdout_thread.join(timeout=10)
+                stderr_thread.join(timeout=10)
+
+                exit_code = proc.returncode or 0
+                output = stdout_parts[0] if stdout_parts else ""
+                stderr_output = stderr_parts[0] if stderr_parts else ""
+
+                if stderr_output:
+                    err_console.print(f"[dim]{stderr_output[:200]}[/]")
+
+                if timed_out:
+                    exit_code = 1
+                    output = ""
+                    err_console.print(
+                        f"[yellow]Iteration timed out after {iteration_timeout}s, continuing to next iteration...[/]"
+                    )
+
             except (OSError, subprocess.SubprocessError) as e:
                 exit_code = 1
                 output = str(e)
@@ -533,6 +696,14 @@ def run_ralph_loop(
 
             ended_at = datetime.now(UTC)
             duration = (ended_at - started_at).total_seconds()
+            state.iteration_started_at = None
+
+            # Handle Ctrl+C during iteration
+            if cancelled:
+                state.status = RalphStatus.CANCELLED
+                state.ended_at = ended_at.isoformat()
+                save_ralph_state(state, proj_path)
+                break
 
             # Parse output
             parsed = parse_claude_json_output(output)
@@ -591,11 +762,19 @@ def run_ralph_loop(
                 console.print("[green]All tasks completed![/]")
                 break
 
-            if exit_code != 0:
+            if exit_code != 0 and not timed_out:
                 state.status = RalphStatus.ERROR
                 state.ended_at = ended_at.isoformat()
                 save_ralph_state(state, proj_path)
                 console.print(f"[red]Claude exited with code {exit_code}[/]")
+                break
+
+            # Check for graceful stop (after iteration results are recorded)
+            if stop_requested:
+                state.status = RalphStatus.COMPLETED
+                state.ended_at = ended_at.isoformat()
+                save_ralph_state(state, proj_path)
+                console.print("[yellow]Stopped after iteration — loop complete.[/]")
                 break
 
             save_ralph_state(state, proj_path)

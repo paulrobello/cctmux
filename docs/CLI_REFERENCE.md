@@ -615,6 +615,8 @@ cctmux-ralph start [OPTIONS] PROJECT_FILE
 | `--permission-mode` | | Claude permission mode | `acceptEdits` |
 | `--model` | | Claude model to use | `None` |
 | `--max-budget` | | Max budget per iteration in USD | `None` |
+| `--timeout` | `-t` | Max seconds per iteration (0 = no timeout) | `0` |
+| `--yolo` | `-y` | Use `--dangerously-skip-permissions` for claude invocations | `false` |
 | `--project` | `-p` | Project root directory | Current directory |
 
 #### `init` - Create a Template Project File
@@ -630,7 +632,21 @@ cctmux-ralph init [OPTIONS]
 | `--output` | `-o` | Output file path | `ralph-project.md` |
 | `--name` | `-n` | Project name for the template | `""` |
 
-#### `cancel` - Cancel an Active Ralph Loop
+#### `stop` - Stop After Current Iteration
+
+Signal the Ralph Loop to exit cleanly after the current iteration finishes. Unlike `cancel`, this does not kill the running subprocess.
+
+```bash
+cctmux-ralph stop [OPTIONS]
+```
+
+| Option | Short | Description | Default |
+|--------|-------|-------------|---------|
+| `--project` | `-p` | Project root directory | Current directory |
+
+#### `cancel` - Cancel an Active Ralph Loop Immediately
+
+Kill the running subprocess and stop the loop immediately.
 
 ```bash
 cctmux-ralph cancel [OPTIONS]
@@ -671,6 +687,8 @@ cctmux-ralph init -o my-project.md -n "My Project"
 cctmux-ralph start ralph-project.md
 cctmux-ralph start ralph-project.md -m 5 --model sonnet
 cctmux-ralph start ralph-project.md --max-budget 1.50
+cctmux-ralph start ralph-project.md -t 600  # 10-minute timeout per iteration
+cctmux-ralph start ralph-project.md -y     # Skip all permission checks
 
 # Monitor a running Ralph Loop
 cctmux-ralph
@@ -680,13 +698,16 @@ cctmux-ralph --preset verbose
 # Check status (one-shot)
 cctmux-ralph status
 
-# Cancel an active loop
+# Stop after current iteration finishes
+cctmux-ralph stop
+
+# Cancel an active loop immediately
 cctmux-ralph cancel
 ```
 
 ### Display Features
 
-- **Status Panel**: Current iteration, status (active/completed/cancelled/error), task counts
+- **Status Panel**: Current iteration, status (active/stopping/completed/cancelled/error), task counts
 - **Iteration Table**: Per-iteration token usage, cost, duration, task completion
 - **Timeline**: Visual progress of iterations over time
 - **Task Progress**: Checklist completion tracking

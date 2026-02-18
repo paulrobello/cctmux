@@ -92,6 +92,7 @@ def _format_duration(seconds: float) -> str:
 _STATUS_SYMBOLS: dict[str, tuple[str, str]] = {
     RalphStatus.WAITING: ("○", "dim"),
     RalphStatus.ACTIVE: ("◐", "yellow"),
+    RalphStatus.STOPPING: ("◐", "magenta"),
     RalphStatus.COMPLETED: ("●", "green"),
     RalphStatus.CANCELLED: ("✗", "red"),
     RalphStatus.MAX_REACHED: ("⊘", "cyan"),
@@ -179,8 +180,9 @@ def build_task_progress_panel(
 ) -> Panel:
     """Show the task checklist from the project file.
 
-    Reads the actual project file to show current task states.
-    Completed tasks in green, pending in yellow.
+    Tasks are sorted with completed items first, then pending.
+    When truncated, the first pending item is always visible so
+    completed items scroll off the top rather than hiding active work.
 
     Args:
         state: Current Ralph state.
@@ -198,32 +200,53 @@ def build_task_progress_panel(
         return Panel(text, title="Task Progress", border_style="green")
 
     content = file_path.read_text(encoding="utf-8")
-    task_count = 0
-    displayed = 0
+    completed: list[str] = []
+    pending: list[str] = []
 
     for line in content.splitlines():
         stripped = line.strip()
         if stripped.startswith("- [x]") or stripped.startswith("- [X]"):
-            task_count += 1
-            if max_tasks == 0 or displayed < max_tasks:
-                task_text = stripped[5:].strip()
-                text.append("● ", style="green")
-                text.append(f"{task_text}\n", style="green")
-                displayed += 1
+            completed.append(stripped[5:].strip())
         elif stripped.startswith("- [ ]"):
-            task_count += 1
-            if max_tasks == 0 or displayed < max_tasks:
-                task_text = stripped[5:].strip()
-                text.append("○ ", style="yellow")
-                text.append(f"{task_text}\n", style="yellow")
-                displayed += 1
+            pending.append(stripped[5:].strip())
 
-    hidden = task_count - displayed
-    if hidden > 0:
-        text.append(f"... and {hidden} more tasks\n", style="dim italic")
+    total = len(completed) + len(pending)
 
-    if task_count == 0:
+    if total == 0:
         text.append("No checklist items found", style="dim")
+        return Panel(text, title="Task Progress", border_style="green")
+
+    # Determine visible window: when truncated, ensure the first pending
+    # item is visible by trimming completed items from the top.
+    limit = max_tasks if max_tasks > 0 else total
+    if limit >= total:
+        # Everything fits — show all completed then all pending
+        visible_completed = completed
+        visible_pending = pending
+        hidden_above = 0
+    else:
+        # Reserve at least 1 slot for the first pending item
+        pending_slots = min(len(pending), max(1, limit - 1)) if pending else 0
+        completed_slots = limit - pending_slots
+        # Show the most recent completed items (tail of the list)
+        hidden_above = max(0, len(completed) - completed_slots)
+        visible_completed = completed[hidden_above:]
+        visible_pending = pending[:pending_slots]
+
+    if hidden_above > 0:
+        text.append(f"... {hidden_above} completed above\n", style="dim italic")
+
+    for task_text in visible_completed:
+        text.append("● ", style="green")
+        text.append(f"{task_text}\n", style="green")
+
+    for task_text in visible_pending:
+        text.append("○ ", style="yellow")
+        text.append(f"{task_text}\n", style="yellow")
+
+    hidden_below = len(pending) - len(visible_pending)
+    if hidden_below > 0:
+        text.append(f"... {hidden_below} more pending\n", style="dim italic")
 
     return Panel(text, title="Task Progress", border_style="green")
 
@@ -403,7 +426,8 @@ def build_ralph_display(
         return Group(*panels)
 
     # Calculate dynamic limits for variable panels
-    effective_max_tasks = 0  # 0 = unlimited
+    max_task_cap = 10  # hard cap: never show more than this many tasks
+    effective_max_tasks = max_task_cap
     effective_max_iterations = config.max_iterations_visible
 
     if terminal_height > 0:
@@ -421,23 +445,20 @@ def build_ralph_display(
         show_iter = config.show_table
 
         if show_tasks and show_iter:
-            natural_tasks = _count_task_lines(project_file, state)
+            natural_tasks = min(_count_task_lines(project_file, state), max_task_cap)
             natural_iters = min(len(state.iterations), config.max_iterations_visible)
             natural_iters = max(natural_iters, 1)
-            total_natural = natural_tasks + natural_iters
             content_budget = max(2, available - task_overhead - iter_overhead)
 
-            if content_budget >= total_natural:
-                effective_max_tasks = natural_tasks
-                effective_max_iterations = natural_iters
-            else:
-                task_share = max(1, round(content_budget * natural_tasks / total_natural))
-                iter_share = max(1, content_budget - task_share)
-                effective_max_tasks = min(task_share, natural_tasks)
-                effective_max_iterations = min(iter_share, natural_iters)
+            # Iterations get priority: allocate their natural size first,
+            # then give remaining space to tasks
+            iter_alloc = min(natural_iters, content_budget - 1)
+            task_alloc = max(1, content_budget - iter_alloc)
+            effective_max_tasks = min(task_alloc, natural_tasks)
+            effective_max_iterations = max(1, iter_alloc)
         elif show_tasks:
             content_budget = max(1, available - task_overhead)
-            effective_max_tasks = content_budget
+            effective_max_tasks = min(content_budget, max_task_cap)
         elif show_iter:
             content_budget = max(1, available - iter_overhead)
             natural_iters = min(len(state.iterations), config.max_iterations_visible)
@@ -538,7 +559,10 @@ def run_ralph_monitor(
                     except OSError:
                         pass
 
-                if changed:
+                # Always refresh when active (elapsed timer must tick),
+                # otherwise only refresh on file changes
+                is_active = state is not None and state.status in (RalphStatus.ACTIVE, RalphStatus.STOPPING)
+                if changed or is_active:
                     live.update(
                         build_ralph_display(
                             state,

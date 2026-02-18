@@ -170,6 +170,13 @@ def build_ralph_status_panel(state: RalphState) -> Panel:
     text.append("  Tools: ", style="dim")
     text.append(str(total_tools), style="bold cyan")
 
+    # Project path
+    if state.project_file:
+        project_dir = str(Path(state.project_file).parent)
+        text.append("\n")
+        text.append("Project: ", style="dim")
+        text.append(compress_paths_in_text(project_dir), style="dim")
+
     return Panel(text, title="Ralph Loop", border_style="blue")
 
 

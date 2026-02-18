@@ -114,6 +114,7 @@ class RalphState(BaseModel):
     project_file: str = ""
     tasks_total: int = 0
     tasks_completed: int = 0
+    child_pid: int | None = None
     iterations: list[dict[str, Any]] = []
 
 
@@ -403,6 +404,48 @@ def stop_ralph_loop(project_path: Path) -> bool:
     return True
 
 
+def _cleanup_stale_child(state: RalphState) -> None:
+    """Kill a stale child process from a previous run that didn't exit cleanly.
+
+    Only kills if the state has a child_pid, the previous status was active/stopping
+    (indicating an unclean exit), and the PID is still a running claude process.
+
+    Args:
+        state: Previous Ralph state loaded from disk.
+    """
+    if state.child_pid is None:
+        return
+    if state.status not in (RalphStatus.ACTIVE, RalphStatus.STOPPING):
+        return
+
+    pid = state.child_pid
+    try:
+        # Check if process is still running and is a claude process
+        os.kill(pid, 0)  # signal 0 = existence check, doesn't actually kill
+    except (ProcessLookupError, PermissionError):
+        return  # process already dead or not ours
+
+    # Verify it's actually a claude process before killing
+    try:
+        result = subprocess.run(
+            ["ps", "-p", str(pid), "-o", "command="],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        cmd_line = result.stdout.strip()
+        if "claude" not in cmd_line:
+            return  # not a claude process, leave it alone
+    except (subprocess.SubprocessError, OSError):
+        return  # can't verify, don't kill
+
+    try:
+        os.kill(pid, signal.SIGTERM)
+        err_console.print(f"[yellow]Cleaned up stale child process (PID {pid}) from previous run.[/]")
+    except (ProcessLookupError, PermissionError):
+        pass  # already dead or not ours
+
+
 def init_project_file(output_path: Path, name: str = "") -> None:
     """Generate a template Ralph project file.
 
@@ -502,9 +545,13 @@ def run_ralph_loop(
         err_console.print(f"[red]Error:[/] Project file not found: {project_file}")
         return
 
+    # Clean up stale child from previous unclean exit
+    previous_state = load_ralph_state(proj_path)
+    if previous_state:
+        _cleanup_stale_child(previous_state)
+
     # Initialize state, preserving iterations from previous runs
     initial_progress = parse_task_progress(project_file)
-    previous_state = load_ralph_state(proj_path)
     previous_iterations = previous_state.iterations if previous_state else []
     previous_iteration_count = len(previous_iterations)
 
@@ -639,6 +686,10 @@ def run_ralph_loop(
                     env=env,
                 )
 
+                # Track child PID in state for orphan cleanup
+                state.child_pid = proc.pid
+                save_ralph_state(state, proj_path)
+
                 # Read stdout/stderr in background threads to avoid deadlock
                 stdout_thread = threading.Thread(target=_read_stream, args=(proc.stdout, stdout_parts), daemon=True)
                 stderr_thread = threading.Thread(target=_read_stream, args=(proc.stderr, stderr_parts), daemon=True)
@@ -704,6 +755,7 @@ def run_ralph_loop(
             ended_at = datetime.now(UTC)
             duration = (ended_at - started_at).total_seconds()
             state.iteration_started_at = None
+            state.child_pid = None
 
             # Handle Ctrl+C during iteration
             if cancelled:

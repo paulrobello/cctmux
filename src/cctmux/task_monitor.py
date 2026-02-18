@@ -944,9 +944,12 @@ def build_stats(tasks: list[Task], session_name: str, window: TaskWindow | None 
     in_progress = sum(1 for t in tasks if t.status == "in_progress")
     completed = sum(1 for t in tasks if t.status == "completed")
 
+    # Truncate long session names (e.g. raw todos filenames) to avoid wrapping
+    display_session = session_name if len(session_name) <= 40 else f"{session_name[:36]}..."
+
     text = Text()
     text.append("Session: ", style="dim")
-    text.append(f"{session_name}  ", style="bold cyan")
+    text.append(f"{display_session}  ", style="bold cyan")
     text.append(f"Total: {total}  ", style="bold")
     text.append(f"○ {pending}  ", style="dim white")
     text.append(f"◐ {in_progress}  ", style="yellow")
@@ -1365,7 +1368,13 @@ def run_monitor(
                     if new_session:
                         current_task_folder = new_session
                         last_mtimes = {}  # Reset mtime tracking
-                        display_name = new_session.name
+                        # For todos files, shorten to "<session-id[:8]>... (todos)"
+                        if new_session.is_file():
+                            stem = new_session.stem
+                            sid = stem.split("-agent-")[0] if "-agent-" in stem else stem
+                            display_name = f"{sid[:8]}... (todos)"
+                        else:
+                            display_name = new_session.name
                         waiting_for_tasks = False
                         tasks, skipped_count = load_tasks_from_dir(current_task_folder)
                         live.update(make_display(tasks, display_name))

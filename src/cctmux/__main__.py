@@ -59,6 +59,43 @@ def version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
+def _sync_skill() -> None:
+    """Auto-install the bundled cc-tmux skill if missing or outdated.
+
+    Compares the content hash of each bundled file against the installed copy.
+    Runs silently; prints a one-line notice only when an update is applied.
+    Called automatically on every cctmux invocation so 'uv tool upgrade'
+    keeps the skill in sync without requiring a manual 'cctmux install-skill'.
+    """
+    import hashlib
+    import shutil
+
+    skill_src = Path(__file__).parent / "skill" / "cc-tmux"
+    skill_dest = Path.home() / ".claude" / "skills" / "cc-tmux"
+
+    if not skill_src.exists():
+        return
+
+    def _md5(path: Path) -> str:
+        return hashlib.md5(path.read_bytes()).hexdigest()  # noqa: S324
+
+    needs_update = False
+    for src_file in skill_src.iterdir():
+        if not src_file.is_file():
+            continue
+        dest_file = skill_dest / src_file.name
+        if not dest_file.exists() or _md5(src_file) != _md5(dest_file):
+            needs_update = True
+            break
+
+    if needs_update:
+        skill_dest.mkdir(parents=True, exist_ok=True)
+        for src_file in skill_src.iterdir():
+            if src_file.is_file():
+                shutil.copy2(src_file, skill_dest / src_file.name)
+        console.print(f"[dim]✓ cc-tmux skill updated ({skill_dest})[/]")
+
+
 @app.command()
 def install_skill() -> None:
     """Install the cc-tmux skill to ~/.claude/skills/."""
@@ -153,6 +190,9 @@ def main(
     ] = None,
 ) -> None:
     """Launch Claude Code in a tmux session for the current directory."""
+    # Auto-sync the bundled skill on every invocation (no-op if already current)
+    _sync_skill()
+
     # If a subcommand was invoked, don't run main logic
     if ctx.invoked_subcommand is not None:
         return

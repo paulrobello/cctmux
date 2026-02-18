@@ -33,4 +33,3 @@ install-skill:
 
 upgrade:
 	uv tool upgrade cctmux --reinstall
-	cctmux install-skill

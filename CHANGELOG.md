@@ -4,6 +4,13 @@ All notable changes to cctmux will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.8] - 2026-02-18
+
+### Changed
+
+- **Auto-sync skill on invocation**: `cctmux` now automatically installs or updates the bundled `cc-tmux` skill on every invocation by comparing content hashes against `~/.claude/skills/cc-tmux/`. A one-line notice is printed only when an update is applied. This means `uv tool upgrade cctmux` keeps the skill in sync without a manual `cctmux install-skill` step.
+- **`make upgrade` simplified**: The `upgrade` Makefile target no longer calls `cctmux install-skill` since the skill is now synced automatically on next run.
+
 ## [0.2.7] - 2026-02-18
 
 ### Added

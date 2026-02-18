@@ -526,6 +526,7 @@ make fmt        # Format code
 make lint       # Lint code
 make typecheck  # Type check
 make test       # Run tests
+make upgrade    # Upgrade installed tool and reinstall skill
 ```
 
 ## Documentation

@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt typecheck checkall clean install
+.PHONY: build test lint fmt typecheck checkall clean install upgrade
 
 build:
 	uv build
@@ -30,3 +30,7 @@ install-skill:
 	mkdir -p ~/.claude/skills/cc-tmux
 	cp -r skill/cc-tmux/* ~/.claude/skills/cc-tmux/
 	@echo "Skill installed to ~/.claude/skills/cc-tmux/"
+
+upgrade:
+	uv tool upgrade cctmux --reinstall
+	cctmux install-skill

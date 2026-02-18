@@ -4,6 +4,12 @@ All notable changes to cctmux will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.6] - 2026-02-18
+
+### Added
+
+- **`make upgrade` target**: New Makefile target that runs `uv tool upgrade cctmux --reinstall` followed by `cctmux install-skill` for quick in-place upgrades
+
 ## [0.2.5] - 2026-02-17
 
 ### Added

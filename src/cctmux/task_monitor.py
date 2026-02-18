@@ -385,10 +385,10 @@ def resolve_task_path(
     """
     tasks_root = Path.home() / ".claude" / "tasks"
 
-    # Case 0: Check CLAUDE_CODE_TASK_LIST_ID environment variable first
+    # Case 0: Check CLAUDE_CODE_TASK_LIST_ID or CCTMUX_SESSION environment variable
     # (only if no explicit session_or_path provided)
     if session_or_path is None:
-        env_task_id = os.environ.get("CLAUDE_CODE_TASK_LIST_ID")
+        env_task_id = os.environ.get("CLAUDE_CODE_TASK_LIST_ID") or os.environ.get("CCTMUX_SESSION")
         if env_task_id:
             env_task_path = tasks_root / env_task_id
             if env_task_path.exists() and any(env_task_path.glob("*.json")):
@@ -1001,8 +1001,11 @@ def _find_most_recent_task_folder(
     if project_path:
         sessions = find_project_sessions(project_path)
         valid_folder_names = {s.session_id for s in sessions}
-        # Also allow custom-named folder matching project name
+        # Also allow custom-named folder matching project name or CCTMUX_SESSION
         valid_folder_names.add(project_path.name)
+        cctmux_session = os.environ.get("CCTMUX_SESSION")
+        if cctmux_session:
+            valid_folder_names.add(cctmux_session)
 
     best: tuple[Path, float] | None = None
     for item in tasks_root.iterdir():

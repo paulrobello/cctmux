@@ -266,7 +266,7 @@ cctmux supports several predefined layouts via the `--layout` / `-l` option:
 | `full-monitor` | Claude + session + tasks + activity dashboard |
 | `dashboard` | Large activity dashboard with session sidebar |
 | `ralph` | Shell + ralph monitor side-by-side (60/40) |
-| `ralph-full` | Shell + ralph monitor + task monitor |
+| `ralph-full` | Claude + git monitor + ralph monitor + task monitor (2x2 grid) |
 | `git-mon` | Claude (60%) + git status monitor (40%) |
 
 ### CC-Mon Layout
@@ -1224,13 +1224,17 @@ cctmux-ralph --preset verbose
 ### Managing Loop Lifecycle
 
 ```bash
-# Cancel a running loop (between iterations)
+# Graceful stop — finish current iteration then exit
+cctmux-ralph stop
+
+# Cancel immediately (between iterations)
 cctmux-ralph cancel
 
 # Show one-shot status
 cctmux-ralph status
 
-# Cancel a specific project's loop
+# Target a specific project's loop
+cctmux-ralph stop -p /path/to/project
 cctmux-ralph cancel -p /path/to/project
 ```
 
@@ -1240,19 +1244,22 @@ The loop stops when any of these conditions are met:
 1. **All checklist items checked**: All `- [ ]` items become `- [x]` in the project file
 2. **Promise tag**: Claude outputs `<promise>completion text</promise>` matching the configured promise
 3. **Max iterations**: Safety limit reached (if set with `--max-iterations`)
-4. **Cancellation**: User runs `cctmux-ralph cancel` or presses Ctrl+C
+4. **Graceful stop**: User runs `cctmux-ralph stop` — finishes current iteration then exits with `completed` status
+5. **Cancellation**: User runs `cctmux-ralph cancel` or presses Ctrl+C
 
 ### Ralph Layouts
 
 ```
 ralph layout:                  ralph-full layout:
 ┌──────────┬──────────┐       ┌──────────┬──────────┐
-│          │ cctmux-  │       │          │ cctmux-  │
-│  shell   │ ralph    │       │  shell   │ ralph    │
-│  60%     │   40%    │       │  60%     ├──────────┤
-│          │          │       │          │ cctmux-  │
-│          │          │       │          │ tasks    │
-└──────────┴──────────┘       └──────────┴──────────┘
+│          │ cctmux-  │       │  CLAUDE   │ cctmux-  │
+│  shell   │ ralph    │       │   50%     │ ralph    │
+│  60%     │   40%    │       │  ~12%h    │  ~77%h   │
+│          │          │       ├──────────┤├──────────┤
+│          │          │       │ cctmux-  ││ cctmux-  │
+│          │          │       │ git      ││ tasks -g │
+└──────────┴──────────┘       │  ~88%h   ││  ~23%h   │
+                              └──────────┴──────────┘
 ```
 
 Start with a Ralph layout:
@@ -1262,12 +1269,36 @@ cctmux -l ralph
 cctmux-ralph start ralph-project.md -m 20 -c "All tests passing"
 ```
 
+Start with the ralph-full layout:
+```bash
+cctmux -l ralph-full
+```
+
+To manually set up the ralph-full layout:
+```bash
+# Identify main pane
+MAIN_PANE=$(tmux display-message -t "$CCTMUX_SESSION" -p "#{pane_id}")
+
+# Split main pane horizontally 50/50 — right column for ralph
+RIGHT_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$MAIN_PANE" -h -p 50)
+tmux send-keys -t "$RIGHT_PANE" "cctmux-ralph" Enter
+
+# Split main pane vertically — bottom-left ~88% for git monitor
+BOTTOM_LEFT=$(tmux split-window -d -P -F "#{pane_id}" -t "$MAIN_PANE" -v -p 88)
+tmux send-keys -t "$BOTTOM_LEFT" "cctmux-git" Enter
+
+# Split right pane vertically — bottom-right ~23% for task monitor
+BOTTOM_RIGHT=$(tmux split-window -d -P -F "#{pane_id}" -t "$RIGHT_PANE" -v -p 23)
+tmux send-keys -t "$BOTTOM_RIGHT" "cctmux-tasks -g" Enter
+```
+
 ### State File
 
 State is stored at `$PROJECT/.claude/ralph-state.json` and tracks:
-- Current status (active, completed, cancelled, max_reached, error)
+- Current status (active, stopping, completed, cancelled, max_reached, error)
 - Iteration count and results (tokens, cost, duration, tools)
 - Task progress (completed/total)
+- Permission mode (reflects actual mode, e.g. `dangerously-skip-permissions` when `--yolo` is used)
 - Per-iteration details for the monitor dashboard
 
 ## Configuration

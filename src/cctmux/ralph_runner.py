@@ -560,7 +560,7 @@ def run_ralph_loop(
         iteration=previous_iteration_count,
         max_iterations=max_iterations,
         completion_promise=completion_promise,
-        permission_mode=permission_mode,
+        permission_mode="dangerously-skip-permissions" if yolo else permission_mode,
         model=model,
         max_budget_usd=max_budget_usd,
         started_at=datetime.now(UTC).isoformat(),
@@ -705,17 +705,23 @@ def run_ralph_loop(
                     now = time.monotonic()
                     if now - last_state_update >= _STATE_UPDATE_INTERVAL:
                         last_state_update = now
-                        # Re-read task progress to catch mid-iteration completions
-                        mid_progress = parse_task_progress(project_file)
-                        state.tasks_total = mid_progress.total
-                        state.tasks_completed = mid_progress.completed
-                        save_ralph_state(state, proj_path)
 
-                        # Check for external stop/cancel signal
+                        # Check for external stop/cancel signal BEFORE saving
+                        # (saving would overwrite the signal with status=active)
                         ext_state = load_ralph_state(proj_path)
                         if ext_state and ext_state.status == RalphStatus.STOPPING:
                             stop_requested = True
                             console.print("[yellow]Stop requested — finishing current iteration...[/]")
+                        elif ext_state and ext_state.status == RalphStatus.CANCELLED:
+                            cancelled = True
+
+                        # Re-read task progress and save state (unless signal received,
+                        # to avoid overwriting the stop/cancel status in the file)
+                        if not stop_requested and not cancelled:
+                            mid_progress = parse_task_progress(project_file)
+                            state.tasks_total = mid_progress.total
+                            state.tasks_completed = mid_progress.completed
+                            save_ralph_state(state, proj_path)
 
                     # Check timeout
                     iter_elapsed = (datetime.now(UTC) - started_at).total_seconds()

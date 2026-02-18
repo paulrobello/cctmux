@@ -108,7 +108,8 @@ graph TB
 | `cctmux-ralph` | Monitor a running Ralph Loop dashboard |
 | `cctmux-ralph start` | Start a Ralph Loop from a project file |
 | `cctmux-ralph init` | Create a template Ralph project file |
-| `cctmux-ralph cancel` | Cancel an active Ralph Loop |
+| `cctmux-ralph stop` | Stop after the current iteration finishes |
+| `cctmux-ralph cancel` | Cancel an active Ralph Loop immediately |
 | `cctmux-ralph status` | Show current Ralph Loop status (one-shot) |
 
 ### Common Operations
@@ -156,7 +157,10 @@ cctmux-ralph
 # Check Ralph Loop status
 cctmux-ralph status
 
-# Cancel a running Ralph Loop
+# Stop after current iteration
+cctmux-ralph stop
+
+# Cancel a running Ralph Loop immediately
 cctmux-ralph cancel
 ```
 

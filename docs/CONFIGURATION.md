@@ -294,7 +294,7 @@ git_monitor:
 | `full-monitor` | Claude + session + tasks + activity monitors |
 | `dashboard` | Large activity dashboard with session sidebar |
 | `ralph` | Shell + ralph monitor side-by-side |
-| `ralph-full` | Shell + ralph monitor + task monitor |
+| `ralph-full` | Claude + git monitor + ralph monitor + task monitor (2x2 grid) |
 | `git-mon` | Claude + git status monitor |
 
 ### Custom Layouts

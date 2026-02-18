@@ -111,7 +111,7 @@ graph TB
 | `cctmux-agents` | `__main__.py:agents_app` | Subagent activity monitor |
 | `cctmux-activity` | `__main__.py:activity_app` | Usage statistics dashboard |
 | `cctmux-git` | `__main__.py:git_app` | Real-time git repository status monitor |
-| `cctmux-ralph` | `__main__.py:ralph_app` | Ralph Loop automation with `start`, `init`, `cancel`, and `status` subcommands |
+| `cctmux-ralph` | `__main__.py:ralph_app` | Ralph Loop automation with `start`, `init`, `stop`, `cancel`, and `status` subcommands |
 
 ### Core Modules
 
@@ -262,10 +262,17 @@ sequenceDiagram
     Runner->>State: save_ralph_state(active)
 
     loop Each Iteration
-        Runner->>State: Check for cancellation
+        Runner->>State: Check for stop/cancel signal
         Runner->>Project: Read project content
         Runner->>Runner: Build system prompt
         Runner->>Claude: Run claude -p with JSON output
+
+        loop Every 5s during subprocess
+            Runner->>State: Check for stop/cancel signal
+            Runner->>Project: Re-read task progress
+            Runner->>State: Save progress (skip if signal detected)
+        end
+
         Claude-->>Runner: JSON result
         Runner->>Runner: Parse output and check promise
         Runner->>Project: Re-read task progress
@@ -277,6 +284,8 @@ sequenceDiagram
             Runner->>State: status = completed
         else Max iterations reached
             Runner->>State: status = max_reached
+        else Stop requested
+            Runner->>State: status = completed
         else Error
             Runner->>State: status = error
         end
@@ -437,13 +446,14 @@ triple               cc-mon               full-monitor
 └──────┴──────┘    └──────┴──────┘    └────────┴─────┘
 
 dashboard               ralph                ralph-full
-┌───────────────┬──────┐ ┌──────────┬────────┐ ┌──────────┬────────┐
-│               │Sess- │ │          │cctmux- │ │          │cctmux- │
-│ cctmux-       │ion   │ │          │ralph   │ │          │ralph   │
-│ activity      ├──────┤ │  Shell   │  40%   │ │  Shell   ├────────┤
-│   70%         │Shell │ │  60% *   │        │ │  60% *   │cctmux- │
-│               │  *   │ │          │        │ │          │tasks   │
-└───────────────┴──────┘ └──────────┴────────┘ └──────────┴────────┘
+┌───────────────┬──────┐ ┌──────────┬────────┐ ┌────────┬────────┐
+│               │Sess- │ │          │cctmux- │ │ Claude │cctmux- │
+│ cctmux-       │ion   │ │          │ralph   │ │  50% * │ralph   │
+│ activity      ├──────┤ │  Shell   │  40%   │ ├────────┤  ~77%h │
+│   70%         │Shell │ │  60% *   │        │ │cctmux- ├────────┤
+│               │  *   │ │          │        │ │git     │cctmux- │
+└───────────────┴──────┘ └──────────┴────────┘ │  ~88%h │tasks   │
+                                               └────────┴────────┘
 
 git-mon
 ┌──────────┬────────┐

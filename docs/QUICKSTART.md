@@ -214,11 +214,12 @@ cctmux-ralph start ralph-project.md
 cctmux-ralph
 ```
 
-### Check Status or Cancel
+### Check Status, Stop, or Cancel
 
 ```bash
 cctmux-ralph status
-cctmux-ralph cancel
+cctmux-ralph stop    # Finish current iteration then exit
+cctmux-ralph cancel  # Cancel immediately
 ```
 
 ## Layouts
@@ -235,7 +236,7 @@ Predefined layouts arrange panes for common workflows. Ten layouts are available
 | `full-monitor` | Claude + session + tasks + activity monitors |
 | `dashboard` | Large activity dashboard with session sidebar |
 | `ralph` | Shell + ralph monitor side-by-side (60/40) |
-| `ralph-full` | Shell + ralph monitor + task monitor |
+| `ralph-full` | Claude + git monitor + ralph monitor + task monitor (2x2 grid) |
 | `git-mon` | Claude (60%) + git status monitor (40%) |
 
 ### CC-Mon Layout
@@ -319,7 +320,7 @@ cctmux -l ralph
 
 ### Ralph Full Layout
 
-Shell + ralph monitor + task monitor:
+Claude + git monitor + ralph monitor + task monitor (2x2 grid):
 
 ```bash
 cctmux -l ralph-full
@@ -327,13 +328,13 @@ cctmux -l ralph-full
 
 ```
 ┌──────────────┬─────────────┐
-│              │ cctmux-     │
-│              │ ralph       │
-│    Shell     │   50%       │
-│    60%       ├─────────────┤
-│              │ cctmux-     │
-│              │ tasks -g    │
-│              │   50%       │
+│  CLAUDE      │ cctmux-     │
+│   50%        │ ralph       │
+│  ~12%h       │  ~77%h      │
+├──────────────┤─────────────┤
+│ cctmux-      │ cctmux-     │
+│ git          │ tasks -g    │
+│  ~88%h       │  ~23%h      │
 └──────────────┴─────────────┘
 ```
 

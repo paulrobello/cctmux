@@ -82,9 +82,10 @@ class TestApplyLayout:
     def test_ralph_full_layout_dispatch(self) -> None:
         """Should dispatch to ralph-full layout handler."""
         commands = apply_layout("test-session", LayoutType.RALPH_FULL, dry_run=True)
-        assert len(commands) == 5
+        assert len(commands) == 7
         assert "cctmux-ralph" in commands[1]
-        assert "cctmux-tasks" in commands[3]
+        assert "cctmux-git" in commands[3]
+        assert "cctmux-tasks" in commands[5]
 
     def test_git_mon_layout_dispatch(self) -> None:
         """Should dispatch to git-mon layout handler."""
@@ -260,18 +261,22 @@ class TestApplyRalphFullLayout:
     def test_dry_run_returns_commands(self) -> None:
         """Should return correct commands in dry run."""
         commands = apply_ralph_full_layout("test-session", dry_run=True)
-        assert len(commands) == 5
-        # 1: horizontal split with 40% right
-        assert "-h -p 40" in commands[0]
+        assert len(commands) == 7
+        # 1: horizontal split 50/50
+        assert "-h -p 50" in commands[0]
         assert "-P" in commands[0]
         # 2: cctmux-ralph in right pane
         assert "cctmux-ralph" in commands[1]
-        # 3: vertical split of right pane (50%)
-        assert "-v -p 50" in commands[2]
-        # 4: cctmux-tasks -g in bottom-right
-        assert "cctmux-tasks -g" in commands[3]
-        # 5: focus main (left) pane
-        assert commands[4] == "tmux select-pane -t test-session:0.0"
+        # 3: vertical split of main pane (88% for git)
+        assert "-v -p 88" in commands[2]
+        # 4: cctmux-git in bottom-left
+        assert "cctmux-git" in commands[3]
+        # 5: vertical split of right pane (23% for tasks)
+        assert "-v -p 23" in commands[4]
+        # 6: cctmux-tasks -g in bottom-right
+        assert "cctmux-tasks -g" in commands[5]
+        # 7: focus main (top-left) pane
+        assert commands[6] == "tmux select-pane -t test-session:0.0"
 
 
 class TestApplyGitMonLayout:

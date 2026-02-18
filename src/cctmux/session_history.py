@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from cctmux.xdg_paths import ensure_directories, get_history_file_path
 
@@ -17,6 +17,19 @@ class SessionEntry(BaseModel):
     project_dir: str
     last_accessed: datetime
     created: datetime
+
+    @model_validator(mode="after")
+    def _normalize_timezones(self) -> "SessionEntry":
+        """Ensure all datetimes are timezone-aware (UTC).
+
+        Older history files may contain naive datetimes. This prevents
+        comparison errors when sorting entries with mixed awareness.
+        """
+        if self.last_accessed.tzinfo is None:
+            self.last_accessed = self.last_accessed.replace(tzinfo=UTC)
+        if self.created.tzinfo is None:
+            self.created = self.created.replace(tzinfo=UTC)
+        return self
 
 
 class SessionHistory(BaseModel):

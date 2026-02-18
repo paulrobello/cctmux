@@ -27,7 +27,7 @@ cctmux provides seven CLI commands:
 | `cctmux-agents` | Monitor subagent activity |
 | `cctmux-activity` | Display usage statistics |
 | `cctmux-git` | Monitor git repository status |
-| `cctmux-ralph` | Ralph Loop automation (start, monitor, cancel, status, init) |
+| `cctmux-ralph` | Ralph Loop automation (start, monitor, stop, cancel, status, init) |
 
 All commands support `--version` and `--help` flags.
 
@@ -75,7 +75,7 @@ cctmux [OPTIONS] [COMMAND]
 | `full-monitor` | Claude + session + tasks + activity |
 | `dashboard` | Large activity dashboard with session sidebar |
 | `ralph` | Shell + ralph monitor side-by-side (60/40) |
-| `ralph-full` | Shell + ralph monitor + task monitor |
+| `ralph-full` | Claude + git monitor + ralph monitor + task monitor (2x2 grid) |
 | `git-mon` | Claude (60%) + git status monitor (40%) |
 
 In addition to the predefined layouts, Claude can save and recall custom pane arrangements stored in the config file. See [Saved Layouts](LAYOUTS.md#saved-layouts) for details.

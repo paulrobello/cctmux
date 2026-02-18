@@ -23,6 +23,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - **Ralph Token Usage Parsing**: Fixed parsing of Claude CLI JSON output which changed `cost_usd` to `total_cost_usd` and moved token counts into a nested `usage` dict
+- **Ralph Stop/Cancel Signal Race Condition**: The mid-iteration polling loop was saving state (with `status: active`) before reading the state file for external signals, overwriting any `stopping` or `cancelled` status written by `cctmux-ralph stop` or `cctmux-ralph cancel`. Now reads external signals first and skips saving if a signal is detected
+- **Ralph State Permission Mode with Yolo**: When `--yolo` is used, the state file now records `dangerously-skip-permissions` instead of the default `acceptEdits`, accurately reflecting the actual permission mode passed to Claude
 
 ## [0.2.3] - 2026-02-16
 

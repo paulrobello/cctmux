@@ -529,20 +529,23 @@ def apply_ralph_layout(session_name: str, dry_run: bool = False) -> list[str]:
 
 
 def apply_ralph_full_layout(session_name: str, dry_run: bool = False) -> list[str]:
-    """Apply ralph-full layout (shell + ralph monitor + task monitor).
+    """Apply ralph-full layout (Claude + git monitor + ralph monitor + task monitor).
 
-    Layout:
+    Layout (2x2 grid):
     ┌──────────┬──────────┐
-    │          │ cctmux-  │
-    │  shell   │ ralph    │
-    │  60%     ├──────────┤
-    │          │ cctmux-  │
-    │          │ tasks    │
+    │  CLAUDE   │ cctmux-  │
+    │   50%     │ ralph    │
+    │  ~12%h    │  ~77%h   │
+    ├──────────┤├──────────┤
+    │ cctmux-  ││ cctmux-  │
+    │ git      ││ tasks -g │
+    │  ~88%h   ││  ~23%h   │
     └──────────┴──────────┘
 
-    Main pane: shell where user runs cctmux-ralph start.
-    Top-right: ralph monitor dashboard.
-    Bottom-right: task monitor.
+    Top-left: Claude Code (main pane, focused).
+    Top-right: Ralph monitor dashboard (~77% height).
+    Bottom-left: Git status monitor (~88% height).
+    Bottom-right: Task monitor with dependency graph (~23% height).
 
     Args:
         session_name: The session name.
@@ -561,8 +564,8 @@ def apply_ralph_full_layout(session_name: str, dry_run: bool = False) -> list[st
         main_pane_id = result.stdout.strip()
         _validate_pane_id(main_pane_id, "main pane")
 
-    # Split horizontally with 40% on the right
-    split_h_cmd = ["tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", session_name, "-h", "-p", "40"]
+    # Split horizontally 50/50 — right column for ralph monitor
+    split_h_cmd = ["tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", session_name, "-h", "-p", "50"]
     commands.append(" ".join(split_h_cmd))
 
     right_pane_id = ""
@@ -580,9 +583,9 @@ def apply_ralph_full_layout(session_name: str, dry_run: bool = False) -> list[st
     if not dry_run:
         _run_tmux(ralph_cmd)
 
-    # Split the right pane vertically (50/50)
+    # Split main pane vertically — bottom-left ~88% for git monitor
     if dry_run:
-        split_v_cmd = [
+        split_v_left_cmd = [
             "tmux",
             "split-window",
             "-d",
@@ -590,31 +593,89 @@ def apply_ralph_full_layout(session_name: str, dry_run: bool = False) -> list[st
             "-F",
             "#{pane_id}",
             "-t",
-            f"{session_name}:0.1",
+            f"{session_name}:0.0",
             "-v",
             "-p",
-            "50",
+            "88",
         ]
     else:
-        split_v_cmd = ["tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", right_pane_id, "-v", "-p", "50"]
-    commands.append(" ".join(split_v_cmd))
+        split_v_left_cmd = [
+            "tmux",
+            "split-window",
+            "-d",
+            "-P",
+            "-F",
+            "#{pane_id}",
+            "-t",
+            main_pane_id,
+            "-v",
+            "-p",
+            "88",
+        ]
+    commands.append(" ".join(split_v_left_cmd))
+
+    bottom_left_pane_id = ""
+    if not dry_run:
+        result = _run_tmux(split_v_left_cmd, capture_output=True, text=True)
+        bottom_left_pane_id = result.stdout.strip()
+        _validate_pane_id(bottom_left_pane_id, "bottom-left pane")
+
+    # Launch cctmux-git in the bottom-left pane
+    if dry_run:
+        git_cmd = ["tmux", "send-keys", "-t", f"{session_name}:0.1", "cctmux-git", "Enter"]
+    else:
+        git_cmd = ["tmux", "send-keys", "-t", bottom_left_pane_id, "cctmux-git", "Enter"]
+    commands.append(" ".join(git_cmd))
+    if not dry_run:
+        _run_tmux(git_cmd)
+
+    # Split right pane vertically — bottom-right ~23% for task monitor
+    if dry_run:
+        split_v_right_cmd = [
+            "tmux",
+            "split-window",
+            "-d",
+            "-P",
+            "-F",
+            "#{pane_id}",
+            "-t",
+            f"{session_name}:0.2",
+            "-v",
+            "-p",
+            "23",
+        ]
+    else:
+        split_v_right_cmd = [
+            "tmux",
+            "split-window",
+            "-d",
+            "-P",
+            "-F",
+            "#{pane_id}",
+            "-t",
+            right_pane_id,
+            "-v",
+            "-p",
+            "23",
+        ]
+    commands.append(" ".join(split_v_right_cmd))
 
     bottom_right_pane_id = ""
     if not dry_run:
-        result = _run_tmux(split_v_cmd, capture_output=True, text=True)
+        result = _run_tmux(split_v_right_cmd, capture_output=True, text=True)
         bottom_right_pane_id = result.stdout.strip()
         _validate_pane_id(bottom_right_pane_id, "bottom-right pane")
 
-    # Launch cctmux-tasks in the bottom-right pane
+    # Launch cctmux-tasks -g in the bottom-right pane
     if dry_run:
-        tasks_cmd = ["tmux", "send-keys", "-t", f"{session_name}:0.2", "cctmux-tasks -g", "Enter"]
+        tasks_cmd = ["tmux", "send-keys", "-t", f"{session_name}:0.3", "cctmux-tasks -g", "Enter"]
     else:
         tasks_cmd = ["tmux", "send-keys", "-t", bottom_right_pane_id, "cctmux-tasks -g", "Enter"]
     commands.append(" ".join(tasks_cmd))
     if not dry_run:
         _run_tmux(tasks_cmd)
 
-    # Focus the left (main) pane
+    # Focus the top-left (main/Claude) pane
     if dry_run:
         focus_cmd = ["tmux", "select-pane", "-t", f"{session_name}:0.0"]
     else:

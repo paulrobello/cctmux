@@ -266,7 +266,7 @@ cctmux supports several predefined layouts via the `--layout` / `-l` option:
 | `full-monitor` | Claude + session + tasks + activity dashboard |
 | `dashboard` | Large activity dashboard with session sidebar |
 | `ralph` | Shell + ralph monitor side-by-side (60/40) |
-| `ralph-full` | Shell + ralph monitor + task monitor |
+| `ralph-full` | Claude + git monitor + ralph monitor + task monitor (2x2 grid) |
 | `git-mon` | Claude (60%) + git status monitor (40%) |
 
 ### CC-Mon Layout
@@ -333,7 +333,7 @@ cctmux -l dashboard
 
 ## Par Mode
 
-Par mode sets up a triple layout with the session monitor in pane 2 and task monitor in pane 3. It checks the current layout and only reconfigures if needed.
+Par mode sets up a triple layout with a compact task stats panel (pane 2) and git monitor (pane 3). It checks the current layout and only reconfigures if needed.
 
 ### Activating Par Mode
 
@@ -354,11 +354,11 @@ W=$(tmux list-panes -t "$CCTMUX_SESSION" -F "#{window_index}" | head -1)
 PANE_INFO=$(tmux list-panes -t "$CCTMUX_SESSION" -F "#{pane_id}:#{pane_current_command}")
 PANE_COUNT=$(echo "$PANE_INFO" | wc -l | tr -d ' ')
 
-# Check if already in par-mode (3 panes with session monitor and task monitor)
-HAS_SESSION_MON=$(echo "$PANE_INFO" | grep -c "cctmux-session" || true)
+# Check if already in par-mode (3 panes with task monitor and git monitor)
 HAS_TASK_MON=$(echo "$PANE_INFO" | grep -c "cctmux-tasks" || true)
+HAS_GIT_MON=$(echo "$PANE_INFO" | grep -c "cctmux-git" || true)
 
-if [ "$PANE_COUNT" -eq 3 ] && [ "$HAS_SESSION_MON" -ge 1 ] && [ "$HAS_TASK_MON" -ge 1 ]; then
+if [ "$PANE_COUNT" -eq 3 ] && [ "$HAS_TASK_MON" -ge 1 ] && [ "$HAS_GIT_MON" -ge 1 ]; then
     echo "Par mode already active"
     exit 0
 fi
@@ -377,33 +377,36 @@ if [ "$PANE_COUNT" -eq 3 ]; then
     # Stop any running processes in side panes, then launch monitors
     tmux send-keys -t "$SIDE1" C-c
     sleep 0.3
-    tmux send-keys -t "$SIDE1" "cctmux-session" Enter
+    tmux send-keys -t "$SIDE1" "cctmux-tasks -s" Enter
 
     tmux send-keys -t "$SIDE2" C-c
     sleep 0.3
-    tmux send-keys -t "$SIDE2" "cctmux-tasks -g" Enter
+    tmux send-keys -t "$SIDE2" "cctmux-git" Enter
 
     echo "Par mode activated (reused existing panes)"
     exit 0
 fi
 
-# Kill extra panes if not 1 or 3 (keep only main pane)
+# Kill extra panes, keeping ONLY the main Claude pane
+# NEVER use kill-pane -a — it can kill the main pane if it's not active
 if [ "$PANE_COUNT" -gt 1 ]; then
-    tmux kill-pane -t "$CCTMUX_SESSION" -a
+    for PANE_ID in $(echo "$PANE_INFO" | grep -v "^${MAIN_PANE}:" | cut -d: -f1); do
+        tmux kill-pane -t "$PANE_ID"
+    done
 fi
 
 # Create triple layout: main (50%) | right column split vertically (50%)
 # Split horizontally with 50% on the right, capture pane ID
 RIGHT_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -p 50)
 
-# Launch session monitor in the right pane
-tmux send-keys -t "$RIGHT_PANE" "cctmux-session" Enter
+# Launch stats-only task monitor in the right pane (compact single-line display)
+tmux send-keys -t "$RIGHT_PANE" "cctmux-tasks -s" Enter
 
-# Split right pane vertically 50/50, capture bottom pane ID
-BOTTOM_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$RIGHT_PANE" -v -p 50)
+# Split right pane vertically — tasks stays on top (3 rows), git gets the rest
+BOTTOM_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$RIGHT_PANE" -v -p 93)
 
-# Launch task monitor in the bottom-right pane
-tmux send-keys -t "$BOTTOM_PANE" "cctmux-tasks -g" Enter
+# Launch git monitor in the bottom-right pane
+tmux send-keys -t "$BOTTOM_PANE" "cctmux-git" Enter
 
 echo "Par mode activated"
 ```
@@ -412,12 +415,223 @@ echo "Par mode activated"
 
 ```
 ---------------------------------
-|            | cctmux-session   |
-|  CLAUDE    |      50%         |
-|   70%      |------------------|
-|            | cctmux-tasks     |
-|            |      50%         |
+|            | cctmux-tasks -s  |
+|  CLAUDE    |------------------|
+|   50%      |                  |
+|            | cctmux-git  93%  |
+|            |                  |
 ---------------------------------
+```
+
+## Saved Layouts
+
+> **Note:** cctmux now supports CLI-managed custom layouts via `cctmux layout add/edit/remove/list`. These are stored as proper YAML in the `custom_layouts` config field and can be used with `cctmux -l <name>`. The in-session saved layout system described below is an additional complementary mechanism for quickly saving/recalling pane arrangements during a session.
+
+**Proactive guidance**: When a user asks about pane management, layouts, or setting up their workspace, let them know they can:
+- **Save** the current layout (or describe a new one) with a name for later reuse
+- **Restore** a previously saved layout by name
+- **List** all saved layouts to see what's available
+- **Delete** saved layouts they no longer need
+
+### Check for Existing Saved Layouts (DO THIS FIRST)
+
+**Before creating or modifying pane layouts**, always check the config file for existing saved layouts and present them as options to the user. This avoids recreating layouts that already exist.
+
+```bash
+# Check for saved layouts in the config file
+grep -A1 '^# --- saved-layout:' ~/.config/cctmux/config.yaml 2>/dev/null
+```
+
+If saved layouts exist, present them to the user in a table like:
+
+| Saved Layout | Description |
+|--------------|-------------|
+| `dev-monitor` | Task monitor + git monitor side by side |
+| `dev-test` | Dev server on right, test runner below it |
+
+Then ask: *"Would you like to activate one of these saved layouts, or set up something different?"*
+
+If no saved layouts exist, inform the user: *"You don't have any saved layouts yet. I can set up panes for you now, and if you like the arrangement, I can save it for easy recall later."*
+
+### Storage Format
+
+Saved layouts are stored as YAML comment blocks at the end of `~/.config/cctmux/config.yaml`.
+
+### Comment Block Format
+
+Each saved layout is a comment block with a structured format. The block starts with `# --- saved-layout: <name> ---` and ends with `# --- end-saved-layout ---`. Inside, each pane is described with its split direction, size percentage, and the command to run.
+
+```yaml
+# --- saved-layout: dev-monitor ---
+# description: Task monitor + git monitor side by side
+# panes:
+#   - split: h, size: 50, command: cctmux-tasks -g
+#   - split: v, size: 50, target: prev, command: cctmux-git
+# --- end-saved-layout ---
+```
+
+**Field definitions**:
+- `split`: `h` (horizontal/right) or `v` (vertical/below)
+- `size`: percentage of the split given to the new pane
+- `target`: which pane to split from — `main` (default, splits from Claude pane) or `prev` (splits the previously created pane)
+- `command`: the shell command to run in the new pane (empty string for a bare shell)
+
+### Saving a Layout
+
+When the user asks to save the current layout or describes a layout to save:
+
+1. **Capture current state** (if saving the current layout):
+```bash
+tmux list-panes -t "$CCTMUX_SESSION" -F "#{pane_id}:#{pane_width}x#{pane_height}:#{pane_current_command}"
+```
+
+2. **Read the existing config file**:
+```bash
+cat ~/.config/cctmux/config.yaml
+```
+
+3. **Append the layout block** to the end of the file. If a layout with the same name already exists, replace it. Example:
+```bash
+cat >> ~/.config/cctmux/config.yaml << 'LAYOUT'
+
+# --- saved-layout: dev-monitor ---
+# description: Task monitor + git monitor side by side
+# panes:
+#   - split: h, size: 50, command: cctmux-tasks -g
+#   - split: v, size: 50, target: prev, command: cctmux-git
+# --- end-saved-layout ---
+LAYOUT
+```
+
+4. **Confirm** to the user what was saved and how to recall it.
+
+### Recalling a Layout
+
+When the user asks to activate a saved layout by name:
+
+1. **Read the config file** and find the matching `# --- saved-layout: <name> ---` block.
+
+2. **Parse the pane definitions** from the comment block.
+
+3. **Examine the current layout** before making changes — check how many panes exist, what commands are running, and whether the desired layout is already active.
+
+4. **Execute the layout** using the safe pane management pattern below. The script is idempotent and **never kills the main Claude pane**.
+
+```bash
+if [ -z "$CCTMUX_SESSION" ]; then
+    echo "Not in a cctmux session"
+    exit 1
+fi
+
+# Identify the main Claude pane — NEVER send commands to or kill this pane
+MAIN_PANE=$(tmux display-message -t "$CCTMUX_SESSION" -p "#{pane_id}")
+
+# Get current pane info using pane IDs (stable identifiers)
+PANE_INFO=$(tmux list-panes -t "$CCTMUX_SESSION" -F "#{pane_id}:#{pane_current_command}")
+PANE_COUNT=$(echo "$PANE_INFO" | wc -l | tr -d ' ')
+
+# --- Step 1: Check if desired layout is already active ---
+# For each command in the saved layout, check if it's already running.
+# Example for "dev-monitor" (cctmux-tasks + cctmux-git):
+HAS_CMD1=$(echo "$PANE_INFO" | grep -c "cctmux-tasks" || true)
+HAS_CMD2=$(echo "$PANE_INFO" | grep -c "cctmux-git" || true)
+EXPECTED_PANES=3  # main + number of panes in saved layout
+
+if [ "$PANE_COUNT" -eq "$EXPECTED_PANES" ] && [ "$HAS_CMD1" -ge 1 ] && [ "$HAS_CMD2" -ge 1 ]; then
+    echo "Layout 'dev-monitor' already active"
+    exit 0
+fi
+
+# --- Step 2: Reuse existing side panes if pane count matches ---
+if [ "$PANE_COUNT" -eq "$EXPECTED_PANES" ]; then
+    # Get all non-main pane IDs (preserve order)
+    SIDE_PANES=$(echo "$PANE_INFO" | grep -v "^${MAIN_PANE}:" | cut -d: -f1)
+    SIDE1=$(echo "$SIDE_PANES" | sed -n '1p')
+    SIDE2=$(echo "$SIDE_PANES" | sed -n '2p')
+
+    # Stop running processes and launch the desired commands
+    tmux send-keys -t "$SIDE1" C-c
+    sleep 0.3
+    tmux send-keys -t "$SIDE1" "cctmux-tasks -g" Enter
+
+    tmux send-keys -t "$SIDE2" C-c
+    sleep 0.3
+    tmux send-keys -t "$SIDE2" "cctmux-git" Enter
+
+    echo "Layout 'dev-monitor' activated (reused existing panes)"
+    exit 0
+fi
+
+# --- Step 3: Kill extra panes, keeping ONLY the main Claude pane ---
+if [ "$PANE_COUNT" -gt 1 ]; then
+    for PANE_ID in $(echo "$PANE_INFO" | grep -v "^${MAIN_PANE}:" | cut -d: -f1); do
+        tmux kill-pane -t "$PANE_ID"
+    done
+fi
+
+# --- Step 4: Create panes per the saved layout definition ---
+# For each pane entry, determine the target and split:
+#   target=main  → split from MAIN_PANE
+#   target=prev  → split from the last created pane
+# Example for "dev-monitor":
+PANE1=$(tmux split-window -d -P -F "#{pane_id}" -t "$MAIN_PANE" -h -p 50)
+tmux send-keys -t "$PANE1" "cctmux-tasks -g" Enter
+
+PANE2=$(tmux split-window -d -P -F "#{pane_id}" -t "$PANE1" -v -p 50)
+tmux send-keys -t "$PANE2" "cctmux-git" Enter
+
+echo "Layout 'dev-monitor' activated"
+```
+
+**Critical safety rules**:
+- **NEVER** use `tmux kill-pane -a` — it kills all panes including the main Claude pane if it's not the active one. Instead, enumerate non-main panes and kill them individually.
+- **ALWAYS** identify the main pane first via `tmux display-message -t "$CCTMUX_SESSION" -p "#{pane_id}"` and exclude it from all kill/send-keys operations.
+- **ALWAYS** use `-d` flag on `split-window` to avoid stealing focus from the Claude pane.
+- **Check before acting** — if the layout is already active, do nothing. If the pane count matches, reuse existing panes instead of destroying and recreating.
+
+### Listing Saved Layouts
+
+When the user asks what layouts are saved:
+
+```bash
+grep -E '^# --- saved-layout:' ~/.config/cctmux/config.yaml 2>/dev/null | sed 's/# --- saved-layout: //;s/ ---//'
+```
+
+### Deleting a Saved Layout
+
+When the user asks to delete a saved layout, remove the entire block from `# --- saved-layout: <name> ---` through `# --- end-saved-layout ---` (inclusive) from the config file.
+
+### Example Layouts
+
+**Three-column with monitors**:
+```yaml
+# --- saved-layout: full-monitor ---
+# description: Session monitor, task monitor, and git monitor
+# panes:
+#   - split: h, size: 50, command: cctmux-session
+#   - split: v, size: 50, target: prev, command: cctmux-tasks -g
+#   - split: v, size: 50, target: prev, command: cctmux-git
+# --- end-saved-layout ---
+```
+
+**Dev server + tests**:
+```yaml
+# --- saved-layout: dev-test ---
+# description: Dev server on right, test runner below it
+# panes:
+#   - split: h, size: 40, command: uv run dev
+#   - split: v, size: 50, target: prev, command: uv run pytest --watch
+# --- end-saved-layout ---
+```
+
+**Bare shells for ad-hoc work**:
+```yaml
+# --- saved-layout: workspace ---
+# description: Two empty shells on the right
+# panes:
+#   - split: h, size: 40, command:
+#   - split: v, size: 50, target: prev, command:
+# --- end-saved-layout ---
 ```
 
 ## Command Reference
@@ -559,6 +773,9 @@ cctmux-tasks -p /path/to/project
 
 # Show only dependency graph (no table)
 cctmux-tasks -g
+
+# Show only stats panel (no graph or table)
+cctmux-tasks -s
 
 # Custom poll interval (default 1.0 seconds)
 cctmux-tasks -i 0.5
@@ -840,6 +1057,12 @@ cctmux-git --no-diff
 # Show 20 recent commits
 cctmux-git -m 20
 
+# Enable periodic remote fetch to check for new remote commits
+cctmux-git --fetch
+
+# Fetch every 30 seconds (default: 60s)
+cctmux-git --fetch -F 30
+
 # Use a preset configuration
 cctmux-git --preset minimal
 cctmux-git --preset verbose
@@ -853,12 +1076,17 @@ Run the git monitor alongside your work:
 # Create pane for git monitor, capture its ID
 GIT_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -p 40)
 tmux send-keys -t "$GIT_PANE" "cctmux-git" Enter
+
+# With remote tracking enabled
+GIT_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -p 40)
+tmux send-keys -t "$GIT_PANE" "cctmux-git --fetch" Enter
 ```
 
 ### Display Features
 
 - **Branch Panel**: Branch name, upstream tracking, ahead/behind counts, stash count, last commit
 - **Files Panel**: Changed files with status indicators (staged in green, unstaged in yellow, untracked in dim)
+- **Remote Commits Panel**: Commits on the remote not yet in the local branch, with fetch timestamp (shown when `--fetch` is enabled)
 - **Recent Commits Panel**: Commit hash, message, author, and relative timestamp
 - **Diff Stats Panel**: Per-file insertion/deletion counts with visual bars
 
@@ -996,13 +1224,17 @@ cctmux-ralph --preset verbose
 ### Managing Loop Lifecycle
 
 ```bash
-# Cancel a running loop (between iterations)
+# Graceful stop — finish current iteration then exit
+cctmux-ralph stop
+
+# Cancel immediately (between iterations)
 cctmux-ralph cancel
 
 # Show one-shot status
 cctmux-ralph status
 
-# Cancel a specific project's loop
+# Target a specific project's loop
+cctmux-ralph stop -p /path/to/project
 cctmux-ralph cancel -p /path/to/project
 ```
 
@@ -1012,19 +1244,22 @@ The loop stops when any of these conditions are met:
 1. **All checklist items checked**: All `- [ ]` items become `- [x]` in the project file
 2. **Promise tag**: Claude outputs `<promise>completion text</promise>` matching the configured promise
 3. **Max iterations**: Safety limit reached (if set with `--max-iterations`)
-4. **Cancellation**: User runs `cctmux-ralph cancel` or presses Ctrl+C
+4. **Graceful stop**: User runs `cctmux-ralph stop` — finishes current iteration then exits with `completed` status
+5. **Cancellation**: User runs `cctmux-ralph cancel` or presses Ctrl+C
 
 ### Ralph Layouts
 
 ```
 ralph layout:                  ralph-full layout:
 ┌──────────┬──────────┐       ┌──────────┬──────────┐
-│          │ cctmux-  │       │          │ cctmux-  │
-│  shell   │ ralph    │       │  shell   │ ralph    │
-│  60%     │   40%    │       │  60%     ├──────────┤
-│          │          │       │          │ cctmux-  │
-│          │          │       │          │ tasks    │
-└──────────┴──────────┘       └──────────┴──────────┘
+│          │ cctmux-  │       │  CLAUDE   │ cctmux-  │
+│  shell   │ ralph    │       │   50%     │ ralph    │
+│  60%     │   40%    │       │  ~12%h    │  ~77%h   │
+│          │          │       ├──────────┤├──────────┤
+│          │          │       │ cctmux-  ││ cctmux-  │
+│          │          │       │ git      ││ tasks -g │
+└──────────┴──────────┘       │  ~88%h   ││  ~23%h   │
+                              └──────────┴──────────┘
 ```
 
 Start with a Ralph layout:
@@ -1034,17 +1269,46 @@ cctmux -l ralph
 cctmux-ralph start ralph-project.md -m 20 -c "All tests passing"
 ```
 
+Start with the ralph-full layout:
+```bash
+cctmux -l ralph-full
+```
+
+To manually set up the ralph-full layout:
+```bash
+# Identify main pane
+MAIN_PANE=$(tmux display-message -t "$CCTMUX_SESSION" -p "#{pane_id}")
+
+# Split main pane horizontally 50/50 — right column for ralph
+RIGHT_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$MAIN_PANE" -h -p 50)
+tmux send-keys -t "$RIGHT_PANE" "cctmux-ralph" Enter
+
+# Split main pane vertically — bottom-left ~88% for git monitor
+BOTTOM_LEFT=$(tmux split-window -d -P -F "#{pane_id}" -t "$MAIN_PANE" -v -p 88)
+tmux send-keys -t "$BOTTOM_LEFT" "cctmux-git" Enter
+
+# Split right pane vertically — bottom-right ~23% for task monitor
+BOTTOM_RIGHT=$(tmux split-window -d -P -F "#{pane_id}" -t "$RIGHT_PANE" -v -p 23)
+tmux send-keys -t "$BOTTOM_RIGHT" "cctmux-tasks -g" Enter
+```
+
 ### State File
 
 State is stored at `$PROJECT/.claude/ralph-state.json` and tracks:
-- Current status (active, completed, cancelled, max_reached, error)
+- Current status (active, stopping, completed, cancelled, max_reached, error)
 - Iteration count and results (tokens, cost, duration, tools)
 - Task progress (completed/total)
+- Permission mode (reflects actual mode, e.g. `dangerously-skip-permissions` when `--yolo` is used)
 - Per-iteration details for the monitor dashboard
 
 ## Configuration
 
-cctmux supports configuration via YAML file at `~/.config/cctmux/config.yaml`.
+cctmux supports layered configuration:
+1. **User config**: `~/.config/cctmux/config.yaml` — base settings
+2. **Project config**: `.cctmux.yaml` in project root — shared team overrides (committed to repo)
+3. **Project local config**: `.cctmux.yaml.local` in project root — personal overrides (gitignored)
+
+Values are deep-merged (last wins). Set `ignore_parent_configs: true` in a project config to skip user config entirely.
 
 ### Configuration File Structure
 

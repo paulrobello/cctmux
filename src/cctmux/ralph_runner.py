@@ -502,11 +502,15 @@ def run_ralph_loop(
         err_console.print(f"[red]Error:[/] Project file not found: {project_file}")
         return
 
-    # Initialize state
+    # Initialize state, preserving iterations from previous runs
     initial_progress = parse_task_progress(project_file)
+    previous_state = load_ralph_state(proj_path)
+    previous_iterations = previous_state.iterations if previous_state else []
+    previous_iteration_count = len(previous_iterations)
+
     state = RalphState(
         status=RalphStatus.ACTIVE,
-        iteration=0,
+        iteration=previous_iteration_count,
         max_iterations=max_iterations,
         completion_promise=completion_promise,
         permission_mode=permission_mode,
@@ -516,6 +520,7 @@ def run_ralph_loop(
         project_file=str(project_file),
         tasks_total=initial_progress.total,
         tasks_completed=initial_progress.completed,
+        iterations=previous_iterations,
     )
     save_ralph_state(state, proj_path)
 
@@ -531,12 +536,14 @@ def run_ralph_loop(
     env = _build_subprocess_env()
 
     try:
-        iteration = 0
+        run_iteration = 0
+        iteration = previous_iteration_count
         while True:
+            run_iteration += 1
             iteration += 1
 
-            # Check max iterations
-            if max_iterations > 0 and iteration > max_iterations:
+            # Check max iterations (for this run only)
+            if max_iterations > 0 and run_iteration > max_iterations:
                 state.status = RalphStatus.MAX_REACHED
                 state.ended_at = datetime.now(UTC).isoformat()
                 state.iteration_started_at = None

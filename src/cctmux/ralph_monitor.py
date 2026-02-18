@@ -173,6 +173,38 @@ def build_ralph_status_panel(state: RalphState) -> Panel:
     return Panel(text, title="Ralph Loop", border_style="blue")
 
 
+def build_last_response_panel(state: RalphState, max_lines: int = 0) -> Panel | None:
+    """Build a panel showing the result text from the last iteration.
+
+    Args:
+        state: Current Ralph state.
+        max_lines: Maximum lines to display. 0 for unlimited.
+
+    Returns:
+        Rich Panel with response text, or None if no iterations.
+    """
+    if not state.iterations:
+        return None
+
+    last_iter = state.iterations[-1]
+    result_text = str(last_iter.get("result_text", ""))
+    if not result_text:
+        return None
+
+    result_text = compress_paths_in_text(result_text)
+    lines = result_text.splitlines()
+
+    if max_lines > 0 and len(lines) > max_lines:
+        lines = lines[:max_lines]
+        lines.append("...")
+
+    text = Text()
+    text.append("\n".join(lines), style="dim")
+
+    iter_num = last_iter.get("number", "?")
+    return Panel(text, title=f"Last Response (#{iter_num})", border_style="magenta")
+
+
 def build_task_progress_panel(
     state: RalphState,
     project_file: Path | None = None,
@@ -427,15 +459,27 @@ def build_ralph_display(
 
     # Calculate dynamic limits for variable panels
     max_task_cap = 10  # hard cap: never show more than this many tasks
+    max_response_cap = 8  # hard cap for last response lines
     effective_max_tasks = max_task_cap
     effective_max_iterations = config.max_iterations_visible
+    effective_max_response = max_response_cap
+
+    has_response = bool(state.iterations and state.iterations[-1].get("result_text"))
 
     if terminal_height > 0:
         # Status panel: ~5 content lines + 2 borders = 7
         status_height = 7
         # Timeline panel: 2 content lines + 2 borders = 4 (if shown)
         timeline_height = 4 if config.show_timeline and state.iterations else 0
-        available = terminal_height - status_height - timeline_height
+        # Response panel: content lines + 2 borders (if shown)
+        response_overhead = 2 if has_response else 0
+        available = terminal_height - status_height - timeline_height - response_overhead
+
+        # Reserve response lines from available budget first
+        if has_response:
+            response_alloc = min(max_response_cap, max(2, available // 4))
+            effective_max_response = response_alloc
+            available -= response_alloc
 
         # Variable panels: task progress and iteration table
         task_overhead = 2  # panel borders
@@ -466,6 +510,12 @@ def build_ralph_display(
 
     # Always show status panel
     panels.append(build_ralph_status_panel(state))
+
+    # Last response panel
+    if has_response:
+        response_panel = build_last_response_panel(state, max_lines=effective_max_response)
+        if response_panel:
+            panels.append(response_panel)
 
     # Task progress panel
     if config.show_task_progress:

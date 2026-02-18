@@ -248,6 +248,7 @@ cctmux-tasks --preset verbose   # Use verbose preset
 - Progress statistics and completion percentage
 - Acceptance criteria tracking from metadata
 - Windowed virtual scrolling for large task lists
+- Supports both `TaskCreate` directory format and `TodoWrite` todos format (`claude -p` sessions)
 
 ### Session Monitor (`cctmux-session`)
 

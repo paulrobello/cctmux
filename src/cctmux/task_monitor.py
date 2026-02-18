@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from rich.console import Console, Group
 from rich.live import Live
@@ -76,6 +76,67 @@ class Task:
         return colors.get(self.status, "white")
 
 
+def _find_todos_file_for_session(session_id: str, todos_root: Path) -> Path | None:
+    """Find the TodoWrite todos file for a session.
+
+    TodoWrite stores todos as ~/.claude/todos/<session-id>-agent-<agent-id>.json.
+    For root (non-subagent) sessions, the agent ID matches the session ID.
+
+    Args:
+        session_id: The Claude session UUID.
+        todos_root: Path to ~/.claude/todos/.
+
+    Returns:
+        Path to the todos file if found, None otherwise.
+    """
+    if not todos_root.exists():
+        return None
+    # Primary: session-id-agent-session-id.json (root agent)
+    primary = todos_root / f"{session_id}-agent-{session_id}.json"
+    if primary.exists():
+        return primary
+    # Fallback: any file starting with session-id
+    for f in todos_root.glob(f"{session_id}*.json"):
+        return f
+    return None
+
+
+def _load_tasks_from_todos_file(todos_file: Path) -> tuple[list[Task], int]:
+    """Load tasks from a TodoWrite JSON array file.
+
+    TodoWrite format: [{"content": str, "status": str, "activeForm": str}, ...]
+
+    Args:
+        todos_file: Path to the todos JSON file.
+
+    Returns:
+        Tuple of (tasks, skipped_count).
+    """
+    try:
+        data = json.loads(todos_file.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return [], 0
+
+    if not isinstance(data, list):
+        return [], 0
+
+    items = cast(list[Any], data)
+    tasks: list[Task] = []
+    for i, item in enumerate(items):
+        if not isinstance(item, dict):
+            continue
+        row = cast(dict[str, Any], item)
+        tasks.append(
+            Task(
+                id=str(i),
+                subject=str(row.get("content", "")),
+                active_form=str(row.get("activeForm", "")),
+                status=str(row.get("status", "pending")),
+            )
+        )
+    return tasks, 0
+
+
 @dataclass
 class SessionInfo:
     """Information about a Claude Code session."""
@@ -98,10 +159,19 @@ class SessionInfo:
         except ValueError:
             modified = datetime.min
 
-        # Check if task folder exists
-        task_path = tasks_root / session_id
+        # Check if task folder exists (cctmux TaskCreate format)
+        task_path: Path | None = tasks_root / session_id
         if not task_path.exists() or not any(task_path.glob("*.json")):
-            task_path = None
+            # Fall back to TodoWrite todos file (only if it has at least one item)
+            todos_file = _find_todos_file_for_session(session_id, tasks_root.parent / "todos")
+            if todos_file:
+                try:
+                    raw = json.loads(todos_file.read_text(encoding="utf-8"))
+                    task_path = todos_file if isinstance(raw, list) and len(cast(list[Any], raw)) > 0 else None
+                except (json.JSONDecodeError, OSError):
+                    task_path = None
+            else:
+                task_path = None
 
         return cls(
             session_id=session_id,
@@ -175,20 +245,28 @@ def find_project_task_sessions(project_path: Path) -> list[SessionInfo]:
 
 
 def load_tasks_from_dir(tasks_dir: Path) -> tuple[list[Task], int]:
-    """Load all tasks from a session directory.
+    """Load all tasks from a session directory or TodoWrite todos file.
+
+    Supports two formats:
+    - Directory: each *.json file is a single cctmux TaskCreate task object.
+    - File: a single JSON array of TodoWrite todos (from claude -p sessions).
 
     Args:
-        tasks_dir: Path to the session's task directory.
+        tasks_dir: Path to the session's task directory or todos file.
 
     Returns:
         Tuple of (tasks, skipped_count) where skipped_count is the number
         of task files that failed to parse.
     """
+    if not tasks_dir.exists():
+        return [], 0
+
+    # Single todos file (TodoWrite format from claude -p sessions)
+    if tasks_dir.is_file():
+        return _load_tasks_from_todos_file(tasks_dir)
+
     tasks: list[Task] = []
     skipped = 0
-
-    if not tasks_dir.exists():
-        return tasks, 0
 
     for json_file in tasks_dir.glob("*.json"):
         try:
@@ -384,6 +462,7 @@ def resolve_task_path(
         Tuple of (task_path, display_name) or (None, error_message).
     """
     tasks_root = Path.home() / ".claude" / "tasks"
+    todos_root = tasks_root.parent / "todos"
 
     # Case 0: Check CLAUDE_CODE_TASK_LIST_ID or CCTMUX_SESSION environment variable
     # (only if no explicit session_or_path provided)
@@ -429,6 +508,32 @@ def resolve_task_path(
             if session.task_path:
                 display = f"{session.session_id[:8]}... ({session.summary[:30]})"
                 return session.task_path, display
+        # No indexed sessions — scan JSONL files for todos (covers claude -p sessions)
+        if todos_root.exists():
+            claude_projects = Path.home() / ".claude" / "projects"
+            encoded = encode_project_path(project_path)
+            project_folder = claude_projects / encoded
+            session_ids_from_jsonl: set[str] = set()
+            if project_folder.exists():
+                for jsonl_file in project_folder.glob("*.jsonl"):
+                    session_ids_from_jsonl.add(jsonl_file.stem)
+            best_todos2: tuple[Path, float] | None = None
+            for item in todos_root.iterdir():
+                if not item.is_file() or not item.name.endswith(".json"):
+                    continue
+                stem = item.stem
+                if "-agent-" not in stem:
+                    continue
+                session_id = stem.split("-agent-")[0]
+                if session_id in session_ids_from_jsonl:
+                    try:
+                        mtime = item.stat().st_mtime
+                        if best_todos2 is None or mtime > best_todos2[1]:
+                            best_todos2 = (item, mtime)
+                    except OSError:
+                        continue
+            if best_todos2:
+                return best_todos2[0], f"{project_path.name} (todos)"
         return None, f"No sessions with tasks found for project: {project_path}"
 
     # Case 3: Try current directory as project
@@ -446,6 +551,39 @@ def resolve_task_path(
     custom_task_folder = tasks_root / project_name
     if custom_task_folder.exists() and any(custom_task_folder.glob("*.json")):
         return custom_task_folder, project_name
+
+    # Case 4b: Check for todos file for any session of this project (including
+    # non-indexed sessions from claude -p runs). Scan the project's JSONL files
+    # to find all session IDs, then match against ~/.claude/todos/.
+    if todos_root.exists():
+        claude_projects = Path.home() / ".claude" / "projects"
+        encoded_cwd = encode_project_path(cwd)
+        project_folder = claude_projects / encoded_cwd
+        # Collect session IDs from index and from JSONL files (covers -p sessions)
+        session_ids: set[str] = set()
+        if project_folder.exists():
+            for jsonl_file in project_folder.glob("*.jsonl"):
+                session_ids.add(jsonl_file.stem)
+            # Also add indexed sessions
+            for s in find_project_sessions(cwd):
+                session_ids.add(s.session_id)
+        best_todos: tuple[Path, float] | None = None
+        for item in todos_root.iterdir():
+            if not item.is_file() or not item.name.endswith(".json"):
+                continue
+            stem = item.stem
+            if "-agent-" not in stem:
+                continue
+            session_id = stem.split("-agent-")[0]
+            if session_id in session_ids:
+                try:
+                    mtime = item.stat().st_mtime
+                    if best_todos is None or mtime > best_todos[1]:
+                        best_todos = (item, mtime)
+                except OSError:
+                    continue
+        if best_todos:
+            return best_todos[0], f"{project_name} (todos)"
 
     # Case 5: No project context - fall back to most recently modified session
     # Only do this if we're not in a recognizable project directory
@@ -1006,6 +1144,14 @@ def _find_most_recent_task_folder(
         cctmux_session = os.environ.get("CCTMUX_SESSION")
         if cctmux_session:
             valid_folder_names.add(cctmux_session)
+        # Also include session IDs from JSONL files (covers claude -p sessions
+        # that don't appear in sessions-index.json)
+        claude_projects = Path.home() / ".claude" / "projects"
+        encoded = encode_project_path(project_path)
+        project_folder = claude_projects / encoded
+        if project_folder.exists():
+            for jsonl_file in project_folder.glob("*.jsonl"):
+                valid_folder_names.add(jsonl_file.stem)
 
     best: tuple[Path, float] | None = None
     for item in tasks_root.iterdir():
@@ -1027,6 +1173,27 @@ def _find_most_recent_task_folder(
                 best = (item, max_mtime)
         except OSError:
             continue
+
+    # Also scan ~/.claude/todos/ for TodoWrite files matching project sessions
+    todos_root = tasks_root.parent / "todos"
+    if todos_root.exists():
+        valid_session_ids = valid_folder_names  # reuse existing set
+        for item in todos_root.iterdir():
+            if not item.is_file() or not item.name.endswith(".json"):
+                continue
+            # Extract session ID: <session-id>-agent-<agent-id>.json
+            stem = item.stem
+            if "-agent-" not in stem:
+                continue
+            session_id = stem.split("-agent-")[0]
+            if valid_session_ids is not None and session_id not in valid_session_ids:
+                continue
+            try:
+                mtime = item.stat().st_mtime
+                if best is None or mtime > best[1]:
+                    best = (item, mtime)
+            except OSError:
+                continue
 
     return best
 
@@ -1108,6 +1275,18 @@ def run_monitor(
 
         current_mtimes: dict[Path, float] = {}
         changed = False
+
+        # Handle single todos file (TodoWrite format)
+        if current_task_folder.is_file():
+            try:
+                mtime = current_task_folder.stat().st_mtime
+                current_mtimes[current_task_folder] = mtime
+                if current_task_folder not in last_mtimes or last_mtimes[current_task_folder] != mtime:
+                    changed = True
+            except OSError:
+                pass
+            last_mtimes = current_mtimes
+            return changed
 
         for json_file in current_task_folder.glob("*.json"):
             try:

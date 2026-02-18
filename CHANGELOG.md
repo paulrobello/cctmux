@@ -4,6 +4,16 @@ All notable changes to cctmux will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.7] - 2026-02-18
+
+### Added
+
+- **TodoWrite Task Monitor Support**: `cctmux-tasks` now detects and displays tasks from `~/.claude/todos/` (the `TodoWrite` format used by `claude -p` sessions), in addition to the cctmux `TaskCreate` directory format. Session auto-detection scans JSONL files to match todos to the current project even when sessions are not indexed.
+
+### Changed
+
+- **Ralph Loop One-Task-Per-Iteration**: System prompt now explicitly instructs Claude to work on exactly one task per iteration ("Work on EXACTLY ONE task — the next incomplete task only"). This ensures each task gets a fresh context window.
+
 ## [0.2.6] - 2026-02-18
 
 ### Added

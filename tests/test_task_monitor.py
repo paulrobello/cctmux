@@ -145,6 +145,49 @@ class TestLoadTasksFromDir:
 
         assert len(tasks) == 1
 
+    def test_loads_todos_file(self, tmp_path: Path) -> None:
+        """Test loading from a TodoWrite JSON array file (claude -p format)."""
+        todos_file = tmp_path / "session-agent-session.json"
+        todos_data = [
+            {"content": "Task A", "status": "completed", "activeForm": "Doing A"},
+            {"content": "Task B", "status": "in_progress", "activeForm": "Doing B"},
+            {"content": "Task C", "status": "pending", "activeForm": ""},
+        ]
+        todos_file.write_text(json.dumps(todos_data), encoding="utf-8")
+
+        tasks, skipped = load_tasks_from_dir(todos_file)
+
+        assert len(tasks) == 3
+        assert skipped == 0
+        assert tasks[0].subject == "Task A"
+        assert tasks[0].status == "completed"
+        assert tasks[0].active_form == "Doing A"
+        assert tasks[0].id == "0"
+        assert tasks[1].subject == "Task B"
+        assert tasks[1].status == "in_progress"
+        assert tasks[2].subject == "Task C"
+        assert tasks[2].status == "pending"
+
+    def test_loads_todos_file_empty(self, tmp_path: Path) -> None:
+        """Test loading from an empty TodoWrite file returns no tasks."""
+        todos_file = tmp_path / "session-agent-session.json"
+        todos_file.write_text(json.dumps([]), encoding="utf-8")
+
+        tasks, skipped = load_tasks_from_dir(todos_file)
+
+        assert tasks == []
+        assert skipped == 0
+
+    def test_loads_todos_file_invalid_json(self, tmp_path: Path) -> None:
+        """Test loading from an invalid todos file returns no tasks."""
+        todos_file = tmp_path / "session-agent-session.json"
+        todos_file.write_text("not json", encoding="utf-8")
+
+        tasks, skipped = load_tasks_from_dir(todos_file)
+
+        assert tasks == []
+        assert skipped == 0
+
 
 class TestBuildStats:
     """Tests for build_stats function."""

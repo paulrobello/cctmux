@@ -176,9 +176,10 @@ def build_system_prompt(
         "INSTRUCTIONS:",
         "1. Read the project file content above. Tasks marked `- [ ]` are incomplete.",
         "   Tasks marked `- [x]` are complete.",
-        "2. Work on the next incomplete task(s). Focus on quality over quantity.",
-        f"3. After completing a task, update the project file ({project_file_path}) by",
-        "   changing `- [ ]` to `- [x]` for that task.",
+        "2. Work on EXACTLY ONE task — the next incomplete task only. Do NOT work on",
+        "   multiple tasks in a single iteration. Each task gets its own fresh iteration.",
+        f"3. After completing the task, update the project file ({project_file_path}) by",
+        "   changing `- [ ]` to `- [x]` for that task only.",
         "4. Run verification steps (tests, linting) as appropriate.",
     ]
 

@@ -555,9 +555,6 @@ def run_ralph_monitor(
     state_file = proj_path / ".claude" / "ralph-state.json"
 
     console.clear()
-    console.print("[bold cyan]Ralph Monitor[/] - Watching for Ralph Loop state")
-    console.print(f"[dim]Project: {compress_paths_in_text(str(proj_path))}[/]")
-    console.print()
 
     last_mtime: float = 0.0
     last_project_mtime: float = 0.0

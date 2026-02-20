@@ -181,12 +181,14 @@ def build_system_prompt(
         f"3. After completing the task, update the project file ({project_file_path}) by",
         "   changing `- [ ]` to `- [x]` for that task only.",
         "4. Run verification steps (tests, linting) as appropriate.",
+        "5. Commit all work to git at the end of the iteration with a descriptive commit",
+        "   message summarizing what was completed. Do NOT skip the commit.",
     ]
 
     if completion_promise:
         lines.extend(
             [
-                f"5. When ALL tasks are complete, output exactly: <promise>{completion_promise}</promise>",
+                f"6. When ALL tasks are complete, output exactly: <promise>{completion_promise}</promise>",
                 "",
                 "CRITICAL: Only output the promise tag when the statement is genuinely true.",
                 "Do not output false promises to exit the loop.",

@@ -266,7 +266,7 @@ cctmux supports several predefined layouts via the `--layout` / `-l` option:
 | `full-monitor` | Claude + session + tasks + activity dashboard |
 | `dashboard` | Large activity dashboard with session sidebar |
 | `ralph` | Shell + ralph monitor side-by-side (60/40) |
-| `ralph-full` | Claude + git monitor + ralph monitor + task monitor (2x2 grid) |
+| `ralph-full` | Claude + git monitor + ralph monitor |
 | `git-mon` | Claude (60%) + git status monitor (40%) |
 
 ### CC-Mon Layout
@@ -1255,10 +1255,10 @@ ralph layout:                  ralph-full layout:
 │          │ cctmux-  │       │  CLAUDE   │ cctmux-  │
 │  shell   │ ralph    │       │   50%     │ ralph    │
 │  60%     │   40%    │       │  ~12%h    │  ~77%h   │
-│          │          │       ├──────────┤├──────────┤
-│          │          │       │ cctmux-  ││ cctmux-  │
-│          │          │       │ git      ││ tasks -g │
-└──────────┴──────────┘       │  ~88%h   ││  ~23%h   │
+│          │          │       ├──────────┤│          │
+│          │          │       │ cctmux-  ││          │
+│          │          │       │ git      ││          │
+└──────────┴──────────┘       │  ~88%h   ││          │
                               └──────────┴──────────┘
 ```
 
@@ -1286,10 +1286,6 @@ tmux send-keys -t "$RIGHT_PANE" "cctmux-ralph" Enter
 # Split main pane vertically — bottom-left ~88% for git monitor
 BOTTOM_LEFT=$(tmux split-window -d -P -F "#{pane_id}" -t "$MAIN_PANE" -v -p 88)
 tmux send-keys -t "$BOTTOM_LEFT" "cctmux-git" Enter
-
-# Split right pane vertically — bottom-right ~23% for task monitor
-BOTTOM_RIGHT=$(tmux split-window -d -P -F "#{pane_id}" -t "$RIGHT_PANE" -v -p 23)
-tmux send-keys -t "$BOTTOM_RIGHT" "cctmux-tasks -g" Enter
 ```
 
 ### State File

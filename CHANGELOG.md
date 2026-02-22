@@ -4,6 +4,12 @@ All notable changes to cctmux will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.10] - 2026-02-22
+
+### Changed
+
+- **Ralph-full layout**: Removed task monitor pane from the ralph-full layout, simplifying it to 3 panes (Claude + ralph monitor + git monitor)
+
 ## [0.2.8] - 2026-02-18
 
 ### Changed

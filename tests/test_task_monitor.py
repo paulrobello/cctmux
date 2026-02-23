@@ -674,11 +674,12 @@ class TestBuildTaskTable:
         assert "Started work" in output or "Made progress" in output
 
     def test_long_subject_truncated(self) -> None:
-        """Should truncate long subjects."""
+        """Should truncate long subjects via Rich table column overflow."""
         tasks = [Task(id="1", subject="A" * 100)]
         table = build_task_table(tasks)
         output = self._render_table(table)
-        assert "..." in output
+        # Rich uses Unicode ellipsis (…) when truncating overflow text
+        assert "…" in output
 
 
 class TestBuildStatsWithWindow:

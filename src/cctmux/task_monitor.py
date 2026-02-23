@@ -870,7 +870,7 @@ def build_task_table(
         blocks = ",".join(task.blocks) if task.blocks else "-"
 
         # Build subject with optional description and completion percentage
-        subject_display = task.subject[:40] + "..." if len(task.subject) > 40 else task.subject
+        subject_display = task.subject
 
         # Add acceptance criteria completion indicator if present
         completed, total = get_acceptance_completion(task.metadata)
@@ -879,8 +879,8 @@ def build_task_table(
             subject_display = f"{subject_display} [{completed}/{total} {pct}%]"
 
         if show_description and task.description:
-            desc_preview = task.description[:30].replace("\n", " ")
-            if len(task.description) > 30:
+            desc_preview = task.description[:80].replace("\n", " ")
+            if len(task.description) > 80:
                 desc_preview += "..."
             subject_display = f"{subject_display}\n[dim]{desc_preview}[/]"
 

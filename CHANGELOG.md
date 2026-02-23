@@ -4,6 +4,13 @@ All notable changes to cctmux will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.11] - 2026-02-22
+
+### Fixed
+
+- **Task monitor table**: Removed hardcoded 40-character subject truncation in the task table view — subjects now use the full available column width, with Rich handling overflow naturally based on terminal size
+- **Task monitor table**: Increased description preview from 30 to 80 characters
+
 ## [0.2.10] - 2026-02-22
 
 ### Changed

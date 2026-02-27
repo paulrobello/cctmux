@@ -671,10 +671,9 @@ def build_agent_table(agents: list[Subagent], max_agents: int = 20) -> Table:
         # Status symbol
         status_text = Text(agent.status_symbol, style=agent.status_color)
 
-        # Agent name — append short agent_id when slug is shared
-        name = agent.display_name
-        if slug_counts[name] > 1:
-            name = f"{name}/{agent.agent_id[:7]}"
+        # Agent name — when slug is shared, show only the agent_id suffix
+        base_name = agent.display_name
+        name = agent.agent_id[:7] if slug_counts[base_name] > 1 else base_name
 
         # Token display
         tokens = f"{_format_tokens(agent.input_tokens)}→{_format_tokens(agent.output_tokens)}"
@@ -685,19 +684,15 @@ def build_agent_table(agents: list[Subagent], max_agents: int = 20) -> Table:
         if len(tools_str) > 15:
             tools_str = tools_str[:12] + "..."
 
-        # Current activity - compress paths for display
+        # Current activity - let ratio=2 column handle width; only strip newlines
         activity = "-"
         if agent.last_activity:
             act = agent.last_activity
-            content = compress_paths_in_text(act.content)
+            content = compress_paths_in_text(act.content).replace("\n", " ")
             if act.activity_type == "tool_call":
-                activity = f"{act.symbol} {act.tool_name}: {content[:40]}"
+                activity = f"{act.symbol} {act.tool_name}: {content}"
             else:
-                # thinking, text, user, and other types all use the same format
-                activity = f"{act.symbol} {content[:50]}"
-
-            if len(activity) > 50:
-                activity = activity[:47] + "..."
+                activity = f"{act.symbol} {content}"
 
         table.add_row(
             status_text,

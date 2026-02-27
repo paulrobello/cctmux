@@ -664,12 +664,17 @@ def build_agent_table(agents: list[Subagent], max_agents: int = 20) -> Table:
     display_limit = max_agents if max_agents > 0 else total_agents
     display_agents = agents[:display_limit]
 
+    # Detect duplicate slugs so we can disambiguate with agent_id suffix
+    slug_counts: Counter[str] = Counter(a.display_name for a in display_agents)
+
     for agent in display_agents:
         # Status symbol
         status_text = Text(agent.status_symbol, style=agent.status_color)
 
-        # Agent name
+        # Agent name — append short agent_id when slug is shared
         name = agent.display_name
+        if slug_counts[name] > 1:
+            name = f"{name}/{agent.agent_id[:6]}"
         if len(name) > 25:
             name = name[:22] + "..."
 

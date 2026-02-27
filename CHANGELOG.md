@@ -4,6 +4,12 @@ All notable changes to cctmux will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.12] - 2026-02-27
+
+### Fixed
+
+- **Subagent monitor**: All agents from the same Claude session shared the same slug (session name), making them indistinguishable. The agent table now appends a short `agent_id` suffix (e.g. `wild-cooking-rivest/a3f8c1`) when multiple agents share the same display name.
+
 ## [0.2.11] - 2026-02-22
 
 ### Fixed

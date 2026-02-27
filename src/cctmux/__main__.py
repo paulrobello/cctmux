@@ -715,6 +715,14 @@ def agents_main(
         bool,
         typer.Option("--list", "-l", help="List available subagents and exit."),
     ] = False,
+    summarize: Annotated[
+        bool,
+        typer.Option(
+            "--summarize",
+            "-S",
+            help="Use claude haiku to generate a ≤64-char summary of each agent's initial prompt (done once per agent).",
+        ),
+    ] = False,
     version: Annotated[
         bool | None,
         typer.Option("--version", callback=version_callback, is_eager=True, help="Show version."),
@@ -736,6 +744,7 @@ def agents_main(
         cctmux-agents --no-activity       # Hide the activity panel
         cctmux-agents -t 0               # Show all agents (no timeout)
         cctmux-agents -t 600             # Hide agents inactive for 10+ minutes
+        cctmux-agents --summarize         # AI-summarize each agent's task
     """
     if ctx.invoked_subcommand is not None:
         return
@@ -755,6 +764,7 @@ def agents_main(
         show_activity=not no_activity,
         inactive_timeout=effective_timeout,
         max_agents=max_agents,
+        summarize=summarize,
     )
 
 

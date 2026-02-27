@@ -5,8 +5,10 @@ from __future__ import annotations
 import json
 import re
 import shutil
+import subprocess
 import time
 from collections import Counter
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
@@ -158,6 +160,34 @@ class Subagent:
         if "haiku" in self.model.lower():
             return "haiku"
         return self.model[:15]
+
+
+def summarize_initial_prompt(prompt: str) -> str:
+    """Call claude haiku to summarize an agent's initial prompt to at most 64 chars.
+
+    Args:
+        prompt: The initial prompt text to summarize.
+
+    Returns:
+        A summary string of at most 64 characters, or empty string on failure.
+    """
+    user_prompt = (
+        "Summarize this agent task in at most 64 characters. "
+        "Reply with ONLY the summary — no quotes, no trailing punctuation:\n\n"
+        f"{prompt[:1000]}"
+    )
+    try:
+        result = subprocess.run(
+            ["claude", "-p", user_prompt, "--model", "claude-haiku-4-5-20251001", "--no-session-persistence"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()[:64]
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        pass
+    return ""
 
 
 def _parse_timestamp(ts_str: str) -> datetime:
@@ -652,12 +682,17 @@ def _format_tokens(count: int) -> str:
     return str(count)
 
 
-def build_agent_table(agents: list[Subagent], max_agents: int = 20) -> Table:
+def build_agent_table(
+    agents: list[Subagent],
+    max_agents: int = 20,
+    summaries: dict[str, str] | None = None,
+) -> Table:
     """Build a table of subagents.
 
     Args:
         agents: List of Subagent objects.
         max_agents: Maximum number of agents to display. 0 for unlimited.
+        summaries: Optional cache of agent_id → AI-generated summary strings.
 
     Returns:
         Rich Table with agent information.
@@ -688,15 +723,15 @@ def build_agent_table(agents: list[Subagent], max_agents: int = 20) -> Table:
         # Status symbol
         status_text = Text(agent.status_symbol, style=agent.status_color)
 
-        # Agent name — when slug is shared, show agent_id + beginning of initial prompt
+        # Agent name — when slug is shared, show agent_id + task description
         base_name = agent.display_name
         if slug_counts[base_name] > 1:
             short_id = agent.agent_id[:7]
-            if agent.initial_prompt:
-                prompt_preview = agent.initial_prompt.replace("\n", " ").strip()[:64]
-                name = f"{short_id} · {prompt_preview}"
-            else:
-                name = short_id
+            # Prefer AI summary, fall back to truncated initial prompt
+            description = (summaries or {}).get(agent.agent_id, "")
+            if not description and agent.initial_prompt:
+                description = agent.initial_prompt.replace("\n", " ").strip()[:64]
+            name = f"{short_id} · {description}" if description else short_id
         else:
             name = base_name
 
@@ -834,6 +869,7 @@ def build_display(
     max_agents: int = 20,
     max_activities: int = 15,
     terminal_height: int = 0,
+    summaries: dict[str, str] | None = None,
 ) -> Group:
     """Build the complete display.
 
@@ -844,6 +880,7 @@ def build_display(
         max_agents: Maximum number of agents to display. 0 for unlimited.
         max_activities: Maximum number of recent activities to show.
         terminal_height: Terminal height for dynamic sizing. 0 to disable.
+        summaries: Optional cache of agent_id → AI-generated summary strings.
 
     Returns:
         Rich Group with all panels.
@@ -884,7 +921,11 @@ def build_display(
 
     components = [
         build_stats_panel(agents, display_name),
-        Panel(build_agent_table(agents, max_agents=effective_agents), title="Subagents", border_style="green"),
+        Panel(
+            build_agent_table(agents, max_agents=effective_agents, summaries=summaries),
+            title="Subagents",
+            border_style="green",
+        ),
     ]
 
     if show_activity:
@@ -936,6 +977,7 @@ def run_subagent_monitor(
     show_activity: bool = True,
     inactive_timeout: float = 300.0,
     max_agents: int = 20,
+    summarize: bool = False,
 ) -> None:
     """Run the subagent monitor with Rich Live.
 
@@ -947,6 +989,8 @@ def run_subagent_monitor(
         inactive_timeout: Seconds of inactivity before hiding an agent.
             Use 0 to disable filtering. Default is 300 (5 minutes).
         max_agents: Maximum number of agents to display. 0 for unlimited.
+        summarize: When True, call claude haiku once per agent to summarize
+            its initial prompt into at most 64 characters.
     """
     console = Console()
 
@@ -975,6 +1019,11 @@ def run_subagent_monitor(
     # Track last data hash to avoid unnecessary display updates
     last_data_hash = ""
 
+    # Summary cache: agent_id → summary string (populated once per agent)
+    summaries: dict[str, str] = {}
+    # Tracks agents whose summary is in-flight so we don't submit twice
+    pending_summaries: set[str] = set()
+
     def compute_data_hash(agents: list[Subagent]) -> str:
         """Compute a simple hash of agent state for change detection."""
         parts: list[str] = []
@@ -982,15 +1031,44 @@ def run_subagent_monitor(
             parts.append(f"{agent.agent_id}:{agent.last_timestamp}:{len(agent.activities)}")
         return "|".join(parts)
 
+    def _on_summary_done(agent_id: str, fut: Future[str]) -> None:
+        """Store completed summary and invalidate the data hash to trigger a redraw."""
+        nonlocal last_data_hash
+        try:
+            result = fut.result()
+            if result:
+                summaries[agent_id] = result
+                last_data_hash = ""  # force redraw on next poll
+        except Exception:
+            pass
+        finally:
+            pending_summaries.discard(agent_id)
+
     try:
-        with Live(
-            Text("Loading subagents...", style="dim"),
-            console=console,
-            refresh_per_second=1,
-        ) as live:
+        with (
+            ThreadPoolExecutor(max_workers=4) as executor,
+            Live(
+                Text("Loading subagents...", style="dim"),
+                console=console,
+                refresh_per_second=1,
+            ) as live,
+        ):
             while True:
                 # Always reload data on each poll
                 agents = load_subagents(session_id, resolved_project, inactive_timeout)
+
+                # Submit summarization tasks for newly discovered agents
+                if summarize:
+                    for agent in agents:
+                        if (
+                            agent.initial_prompt
+                            and agent.agent_id not in summaries
+                            and agent.agent_id not in pending_summaries
+                        ):
+                            pending_summaries.add(agent.agent_id)
+                            fut = executor.submit(summarize_initial_prompt, agent.initial_prompt)
+                            fut.add_done_callback(lambda f, aid=agent.agent_id: _on_summary_done(aid, f))
+
                 data_hash = compute_data_hash(agents)
 
                 # Only update display if data actually changed
@@ -1004,6 +1082,7 @@ def run_subagent_monitor(
                                 show_activity,
                                 max_agents=max_agents,
                                 terminal_height=console.height - 2,
+                                summaries=summaries if summarize else None,
                             )
                         )
                     else:

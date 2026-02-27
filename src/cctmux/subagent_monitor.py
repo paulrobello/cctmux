@@ -744,11 +744,13 @@ def build_agent_table(
         if len(tools_str) > 15:
             tools_str = tools_str[:12] + "..."
 
-        # Current activity - let ratio=2 column handle width; only strip newlines
+        # Current activity - truncate thinking to avoid wall-of-text; let Rich handle width
         activity = "-"
         if agent.last_activity:
             act = agent.last_activity
             content = compress_paths_in_text(act.content).replace("\n", " ")
+            if act.activity_type == "thinking":
+                content = content[:80]
             if act.activity_type == "tool_call":
                 activity = f"{act.symbol} {act.tool_name}: {content}"
             else:

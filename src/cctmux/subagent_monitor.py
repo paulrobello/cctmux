@@ -97,6 +97,7 @@ class Subagent:
     tool_counts: Counter[str] = field(default_factory=_empty_counter)
     activities: list[SubagentActivity] = field(default_factory=_empty_activity_list)
     last_activity: SubagentActivity | None = None
+    initial_prompt: str = ""
     raw_data: dict[str, Any] = field(default_factory=_empty_dict)
 
     @property
@@ -219,6 +220,7 @@ def parse_subagent_file(file_path: Path) -> Subagent | None:
     cache_creation_tokens = 0
     tool_counts: Counter[str] = Counter()
     activities: list[SubagentActivity] = []
+    initial_prompt = ""
     status = AgentStatus.UNKNOWN
 
     try:
@@ -316,10 +318,24 @@ def parse_subagent_file(file_path: Path) -> Subagent | None:
                 # Handle user messages (initial prompt)
                 elif msg_type == "user":
                     content = message.get("content", "")
-                    if isinstance(content, str) and content and not content.startswith("<"):
+                    text: str = ""
+                    if isinstance(content, str):
+                        text = content
+                    elif isinstance(content, list):
+                        # Extract text from content blocks
+                        for raw_block in cast(list[Any], content):
+                            if not isinstance(raw_block, dict):
+                                continue
+                            typed_block = cast(dict[str, Any], raw_block)
+                            if typed_block.get("type") == "text":
+                                text = str(typed_block.get("text", ""))
+                                break
+                    if text and not text.startswith("<"):
+                        if not initial_prompt:
+                            initial_prompt = text
                         activity = SubagentActivity(
                             activity_type="user",
-                            content=content[:200],
+                            content=text[:200],
                             timestamp=timestamp,
                         )
                         # Insert at beginning
@@ -366,6 +382,7 @@ def parse_subagent_file(file_path: Path) -> Subagent | None:
         tool_counts=tool_counts,
         activities=activities,
         last_activity=activities[-1] if activities else None,
+        initial_prompt=initial_prompt,
     )
 
 
@@ -671,9 +688,17 @@ def build_agent_table(agents: list[Subagent], max_agents: int = 20) -> Table:
         # Status symbol
         status_text = Text(agent.status_symbol, style=agent.status_color)
 
-        # Agent name — when slug is shared, show only the agent_id suffix
+        # Agent name — when slug is shared, show agent_id + beginning of initial prompt
         base_name = agent.display_name
-        name = agent.agent_id[:7] if slug_counts[base_name] > 1 else base_name
+        if slug_counts[base_name] > 1:
+            short_id = agent.agent_id[:7]
+            if agent.initial_prompt:
+                prompt_preview = agent.initial_prompt.replace("\n", " ").strip()
+                name = f"{short_id} · {prompt_preview}"
+            else:
+                name = short_id
+        else:
+            name = base_name
 
         # Token display
         tokens = f"{_format_tokens(agent.input_tokens)}→{_format_tokens(agent.output_tokens)}"

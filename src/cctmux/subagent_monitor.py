@@ -674,7 +674,7 @@ def build_agent_table(agents: list[Subagent], max_agents: int = 20) -> Table:
         # Agent name — append short agent_id when slug is shared
         name = agent.display_name
         if slug_counts[name] > 1:
-            name = f"{name}/{agent.agent_id[:6]}"
+            name = f"{name}/{agent.agent_id[:7]}"
 
         # Token display
         tokens = f"{_format_tokens(agent.input_tokens)}→{_format_tokens(agent.output_tokens)}"

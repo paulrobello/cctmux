@@ -693,7 +693,7 @@ def build_agent_table(agents: list[Subagent], max_agents: int = 20) -> Table:
         if slug_counts[base_name] > 1:
             short_id = agent.agent_id[:7]
             if agent.initial_prompt:
-                prompt_preview = agent.initial_prompt.replace("\n", " ").strip()
+                prompt_preview = agent.initial_prompt.replace("\n", " ").strip()[:64]
                 name = f"{short_id} · {prompt_preview}"
             else:
                 name = short_id

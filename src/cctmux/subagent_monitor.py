@@ -675,8 +675,6 @@ def build_agent_table(agents: list[Subagent], max_agents: int = 20) -> Table:
         name = agent.display_name
         if slug_counts[name] > 1:
             name = f"{name}/{agent.agent_id[:6]}"
-        if len(name) > 25:
-            name = name[:22] + "..."
 
         # Token display
         tokens = f"{_format_tokens(agent.input_tokens)}→{_format_tokens(agent.output_tokens)}"

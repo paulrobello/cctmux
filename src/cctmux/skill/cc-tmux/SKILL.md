@@ -1114,6 +1114,17 @@ cctmux-agents --no-activity
 
 # Custom poll interval (default 1.0 seconds)
 cctmux-agents -i 0.5
+
+# AI-summarize each agent's initial prompt via claude haiku (done once per agent)
+cctmux-agents --summarize
+cctmux-agents -S
+
+# Hide agents inactive for more than 10 minutes (default 300s); 0 = show all
+cctmux-agents -t 600
+cctmux-agents -t 0
+
+# Limit table to 5 agents (0 = unlimited)
+cctmux-agents -M 5
 ```
 
 ### Subagent Monitor in a Pane
@@ -1129,7 +1140,7 @@ tmux send-keys -t "$AGENT_PANE" "cctmux-agents" Enter
 ### Display Features
 
 - **Stats Panel**: Total subagents, active/completed counts, aggregate token usage, top tools across all agents
-- **Agent Table**: Name/slug, model, duration, tokens (in→out), top tools, current activity
+- **Agent Table**: Agent ID + task description, model, duration, tokens (in→out), top tools, current activity
 - **Activity Panel**: Recent activities across all agents with timestamps and agent IDs
 - **Status Indicators**: `○` unknown, `◐` active, `●` completed
 - **Real-time Updates**: Polls agent files and updates display automatically
@@ -1138,12 +1149,16 @@ tmux send-keys -t "$AGENT_PANE" "cctmux-agents" Enter
 ### Subagent Information
 
 Each subagent displays:
-- **Display Name**: Human-readable slug (e.g., "dreamy-mapping-naur") or agent ID
+- **Agent Name**: When multiple agents share the same session slug, shows `<agent-id> · <task>` where task is either the first 64 chars of the initial prompt or an AI-generated summary (with `--summarize`)
 - **Model**: The Claude model being used (haiku, sonnet, opus)
 - **Duration**: How long the agent has been running
 - **Tokens**: Input and output token counts
 - **Tools**: Most frequently used tools with counts
 - **Current Activity**: Latest tool call, thinking, or text output
+
+### Task Summarization (`--summarize`)
+
+When `--summarize` / `-S` is passed, each newly discovered agent's initial prompt is sent once to `claude-haiku` to generate a concise ≤64-character summary of what the agent was asked to do. This runs in a background thread pool (up to 4 concurrent summarizations) and the display updates automatically when summaries arrive. Without this flag, the first 64 characters of the raw initial prompt are shown as a fallback.
 
 ### Subagent File Location
 

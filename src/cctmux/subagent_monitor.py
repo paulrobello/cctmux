@@ -850,11 +850,10 @@ def build_activity_panel(agents: list[Subagent], max_activities: int = 15) -> Pa
         text.append(f"{activity.symbol} ", style=activity.color)
 
         content = compress_paths_in_text(activity.content.replace("\n", " "))
+        if activity.activity_type == "thinking":
+            content = content[:80]
         if activity.activity_type == "tool_call":
             content = f"{activity.tool_name}: {content}"
-
-        if len(content) > 60:
-            content = content[:57] + "..."
 
         text.append(f"{content}\n", style=activity.color)
 

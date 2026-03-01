@@ -998,6 +998,12 @@ def run_subagent_monitor(
     # Resolve what to monitor - may return project without session if no subagents yet
     session_id, resolved_project, display_name = resolve_subagent_path(session_or_path, project_path)
 
+    # When no explicit session was requested, don't lock to the resolved session.
+    # Instead, pass None so load_subagents scans ALL sessions for the project on
+    # every poll — this lets filter_inactive_agents surface whichever session is
+    # currently active, and automatically picks up new sessions as they start.
+    poll_session_id: str | None = session_id if session_or_path else None
+
     # If we have neither session nor project, try to at least use current directory
     if not session_id and not resolved_project:
         # Fall back to current directory even if no subagents exist yet
@@ -1056,7 +1062,7 @@ def run_subagent_monitor(
         ):
             while True:
                 # Always reload data on each poll
-                agents = load_subagents(session_id, resolved_project, inactive_timeout)
+                agents = load_subagents(poll_session_id, resolved_project, inactive_timeout)
 
                 # Submit summarization tasks for newly discovered agents
                 if summarize:

@@ -251,7 +251,6 @@ def find_project_sessions(project_path: Path) -> list[SessionInfo]:
         if task_path is None:
             continue
         try:
-
             mtime = datetime.fromtimestamp(jsonl_file.stat().st_mtime, tz=UTC)
         except OSError:
             mtime = datetime.min.replace(tzinfo=UTC)

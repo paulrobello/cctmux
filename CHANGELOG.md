@@ -4,6 +4,23 @@ All notable changes to cctmux will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.13] - 2026-03-01
+
+### Added
+
+- **Subagent monitor `--summarize` flag**: New `-S`/`--summarize` option uses the haiku model to generate concise AI summaries of agent initial prompts, replacing the raw truncated text in the name column
+- **Subagent monitor initial prompt preview**: Name column now shows a short preview of the agent's initial prompt alongside the `agent_id` for better identification
+
+### Fixed
+
+- **Subagent monitor**: Align `agent_id` suffix length to 7 chars to match activity log display
+- **Subagent monitor**: Show only `agent_id` in name column when slug is shared across agents; remove excess activity truncation
+- **Subagent monitor**: Truncate initial prompt preview to 64 chars in name column to prevent overflow
+- **Subagent monitor**: Truncate thinking content to 80 chars in current activity column
+- **Subagent monitor**: Remove hardcoded 60-char truncation in recent activity panel — now uses full available width
+- **Subagent monitor**: Scan all project sessions at startup instead of locking to a single session, so agents from any session in the project are visible immediately
+- **Task monitor**: Detect active Claude sessions not yet indexed in `sessions-index.json` so tasks appear without a delay
+
 ## [0.2.12] - 2026-02-27
 
 ### Fixed

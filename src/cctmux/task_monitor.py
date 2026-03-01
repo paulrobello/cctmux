@@ -7,7 +7,7 @@ import os
 import shutil
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
@@ -226,6 +226,44 @@ def find_project_sessions(project_path: Path) -> list[SessionInfo]:
 
     # Convert to SessionInfo objects
     sessions = [SessionInfo.from_index_entry(entry, tasks_root) for entry in entries]
+    indexed_ids = {s.session_id for s in sessions}
+
+    # Also scan JSONL files directly — active sessions may not be in sessions-index.json yet
+    todos_root = tasks_root.parent / "todos"
+    for jsonl_file in project_folder.glob("*.jsonl"):
+        session_id = jsonl_file.stem
+        if session_id in indexed_ids:
+            continue
+        # Check tasks dir
+        task_dir = tasks_root / session_id
+        task_path: Path | None = None
+        if task_dir.exists() and any(task_dir.glob("*.json")):
+            task_path = task_dir
+        else:
+            # Check todos file
+            todos_file = _find_todos_file_for_session(session_id, todos_root)
+            if todos_file:
+                try:
+                    raw = json.loads(todos_file.read_text(encoding="utf-8"))
+                    task_path = todos_file if isinstance(raw, list) and len(cast(list[Any], raw)) > 0 else None
+                except (json.JSONDecodeError, OSError):
+                    task_path = None
+        if task_path is None:
+            continue
+        try:
+
+            mtime = datetime.fromtimestamp(jsonl_file.stat().st_mtime, tz=UTC)
+        except OSError:
+            mtime = datetime.min.replace(tzinfo=UTC)
+        sessions.append(
+            SessionInfo(
+                session_id=session_id,
+                project_path=str(project_path),
+                summary="(active session)",
+                modified=mtime,
+                task_path=task_path,
+            )
+        )
 
     # Sort by modified time, most recent first
     return sorted(sessions, key=lambda s: s.modified, reverse=True)

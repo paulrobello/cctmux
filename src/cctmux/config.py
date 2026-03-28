@@ -168,6 +168,32 @@ class CustomLayout(BaseModel):
     focus_main: bool = True  # focus main pane at end (unless a split has focus=True)
 
 
+class TeamAgent(BaseModel):
+    """Configuration for a single agent in a team."""
+
+    role: str  # e.g., "architect"
+    prompt: str = ""  # role instructions (appended to system prompt)
+    claude_args: str | None = None  # per-agent claude CLI arg overrides
+
+
+class TeamLayoutType(StrEnum):
+    """Available team pane layout strategies."""
+
+    GRID = "grid"
+    COLUMNS = "columns"
+    ROWS = "rows"
+
+
+class TeamConfig(BaseModel):
+    """Configuration for a team of Claude Code instances."""
+
+    name: str = ""  # team name (defaults to project name)
+    shared_task_list: bool = True  # all instances share CLAUDE_CODE_TASK_LIST_ID
+    layout: TeamLayoutType = TeamLayoutType.GRID
+    monitor: bool = True  # add cctmux-tasks monitor pane
+    agents: list[TeamAgent]
+
+
 @dataclass
 class ConfigWarning:
     """A config validation warning."""
@@ -201,6 +227,9 @@ class Config(BaseModel):
 
     # Custom layouts
     custom_layouts: list[CustomLayout] = []
+
+    # Team configuration
+    team: TeamConfig | None = None
 
 
 def _deep_merge(base: dict[str, object], override: dict[str, object]) -> dict[str, object]:
@@ -351,6 +380,43 @@ def load_config(
                 pass
 
         return Config(), warnings
+
+
+def load_team_config(path: Path) -> TeamConfig:
+    """Load a team configuration from a standalone YAML file.
+
+    Reads the YAML file and looks for a ``team:`` key. If present, validates
+    that sub-tree; otherwise treats the entire file as team config.
+
+    Args:
+        path: Path to the team YAML file.
+
+    Returns:
+        Parsed TeamConfig.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        ValueError: If the YAML is invalid or fails validation.
+    """
+    if not path.exists():
+        raise FileNotFoundError(f"Team config file not found: {path}")
+
+    try:
+        with path.open(encoding="utf-8") as f:
+            raw = yaml.safe_load(f)
+    except yaml.YAMLError as e:
+        raise ValueError(f"Invalid YAML in {path}: {e}") from e
+
+    if not isinstance(raw, dict):
+        raise ValueError(f"Expected a YAML mapping in {path}, got {type(raw).__name__}")
+
+    typed_raw = cast(dict[str, object], raw)
+    data: dict[str, object] = cast(dict[str, object], typed_raw.get("team", typed_raw))
+
+    try:
+        return TeamConfig.model_validate(data)
+    except ValidationError as e:
+        raise ValueError(f"Team config validation failed: {e}") from e
 
 
 def display_config_warnings(warnings: list[ConfigWarning], console: Console) -> None:

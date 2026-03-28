@@ -1,9 +1,10 @@
 """Predefined tmux layouts for cctmux."""
 
+import math
 import subprocess
 from collections.abc import Callable
 
-from cctmux.config import CustomLayout, LayoutType, PaneSplit, SplitDirection
+from cctmux.config import CustomLayout, LayoutType, PaneSplit, SplitDirection, TeamLayoutType
 
 # Type alias for layout handler functions
 LayoutHandler = Callable[[str, bool], list[str]]
@@ -746,7 +747,9 @@ def apply_git_mon_layout(session_name: str, dry_run: bool = False) -> list[str]:
     return commands
 
 
-def apply_custom_layout(session_name: str, layout: CustomLayout, dry_run: bool = False) -> list[str]:
+def apply_custom_layout(
+    session_name: str, layout: CustomLayout, dry_run: bool = False
+) -> tuple[list[str], dict[str, str]]:
     """Apply a custom layout to a tmux session.
 
     Args:
@@ -755,7 +758,8 @@ def apply_custom_layout(session_name: str, layout: CustomLayout, dry_run: bool =
         dry_run: If True, return commands without executing.
 
     Returns:
-        List of commands that were (or would be) executed.
+        Tuple of (commands, pane_registry) where pane_registry maps split
+        names to tmux pane IDs (e.g. {"main": "%5", "agent-1": "%6"}).
     """
     commands: list[str] = []
 
@@ -854,7 +858,7 @@ def apply_custom_layout(session_name: str, layout: CustomLayout, dry_run: bool =
         if not dry_run:
             _run_tmux(focus_cmd)
 
-    return commands
+    return commands, pane_registry
 
 
 # Built-in layout templates for --from support in layout add
@@ -975,6 +979,209 @@ def apply_layout(
     if custom_layouts:
         for custom in custom_layouts:
             if custom.name == layout:
-                return apply_custom_layout(session_name, custom, dry_run)
+                commands, _registry = apply_custom_layout(session_name, custom, dry_run)
+                return commands
 
     return []
+
+
+def compute_team_layout(
+    n_agents: int,
+    layout_type: str = "grid",
+    has_monitor: bool = True,
+) -> CustomLayout:
+    """Compute a tmux pane layout for N team agent panes.
+
+    Agent 0 occupies the main pane (no split needed). Agents 1..N-1 are
+    created via splits. An optional monitor pane is added at the bottom.
+
+    Args:
+        n_agents: Total number of Claude agent panes (must be >= 1).
+        layout_type: Layout strategy -- "grid", "columns", or "rows".
+        has_monitor: Whether to add a cctmux-tasks monitor pane at the bottom.
+
+    Returns:
+        A CustomLayout with named splits for each agent pane.
+
+    Raises:
+        ValueError: If n_agents < 1 or layout_type is unknown.
+    """
+    if n_agents < 1:
+        raise ValueError(f"n_agents must be >= 1, got {n_agents}")
+
+    # Validate layout_type against the enum
+    try:
+        TeamLayoutType(layout_type)
+    except ValueError:
+        valid = ", ".join(f'"{t.value}"' for t in TeamLayoutType)
+        raise ValueError(f"Unknown layout_type {layout_type!r}; expected one of {valid}") from None
+
+    splits: list[PaneSplit] = []
+
+    if layout_type == TeamLayoutType.COLUMNS:
+        splits = _compute_columns_splits(n_agents)
+    elif layout_type == TeamLayoutType.ROWS:
+        splits = _compute_rows_splits(n_agents)
+    else:  # grid
+        splits = _compute_grid_splits(n_agents)
+
+    # Optional monitor pane at the bottom of main
+    if has_monitor:
+        splits.append(
+            PaneSplit(
+                direction=SplitDirection.VERTICAL,
+                size=15,
+                command="cctmux-tasks -g",
+                name="monitor",
+                target="main",
+            )
+        )
+
+    return CustomLayout(
+        name=f"team-{layout_type}-{n_agents}",
+        description=f"Team layout ({layout_type}) for {n_agents} agents",
+        splits=splits,
+        focus_main=True,
+    )
+
+
+def _compute_columns_splits(n_agents: int) -> list[PaneSplit]:
+    """Compute splits for the columns strategy (all agents side-by-side).
+
+    Args:
+        n_agents: Total number of agent panes.
+
+    Returns:
+        List of PaneSplit for agents 1..N-1.
+    """
+    splits: list[PaneSplit] = []
+    for i in range(1, n_agents):
+        # Each split divides the remaining space equally.
+        # After placing agent 0, agent 1 splits main; agent 2 splits last, etc.
+        # The size percentage for agent i is: 100 // (n_agents - i + 1)
+        # This ensures roughly equal widths when applied sequentially.
+        remaining = n_agents - i + 1
+        size = max(1, min(90, 100 // remaining))
+        splits.append(
+            PaneSplit(
+                direction=SplitDirection.HORIZONTAL,
+                size=size,
+                name=f"agent-{i}",
+                target="last" if i > 1 else "main",
+            )
+        )
+    return splits
+
+
+def _compute_rows_splits(n_agents: int) -> list[PaneSplit]:
+    """Compute splits for the rows strategy (all agents stacked vertically).
+
+    Args:
+        n_agents: Total number of agent panes.
+
+    Returns:
+        List of PaneSplit for agents 1..N-1.
+    """
+    splits: list[PaneSplit] = []
+    for i in range(1, n_agents):
+        remaining = n_agents - i + 1
+        size = max(1, min(90, 100 // remaining))
+        splits.append(
+            PaneSplit(
+                direction=SplitDirection.VERTICAL,
+                size=size,
+                name=f"agent-{i}",
+                target="last" if i > 1 else "main",
+            )
+        )
+    return splits
+
+
+def _compute_grid_splits(n_agents: int) -> list[PaneSplit]:
+    """Compute splits for the grid strategy (best-fit rectangular grid).
+
+    The grid is laid out as columns, each potentially having multiple rows.
+    First, horizontal splits create the top-row columns. Then vertical splits
+    subdivide columns that need additional rows. When the total agent count
+    does not fill a perfect rectangle, extra rows are assigned to the
+    rightmost columns so that the main (leftmost) pane stays as large as
+    possible.
+
+    Grid examples::
+
+        1 agent:  [main]
+        2 agents: [main | agent-1]
+        3 agents: [main | agent-1 / agent-2]   (right col split vertically)
+        4 agents: [main / agent-2 | agent-1 / agent-3]  (2x2)
+        5 agents: [main | agent-1 | agent-2]  top row
+                  [agent-3 | agent-4]          bottom row (under agent-1, agent-2)
+        6 agents: [main | agent-1 | agent-2]  top row
+                  [agent-3 | agent-4 | agent-5] bottom row (3x2)
+
+    Args:
+        n_agents: Total number of agent panes.
+
+    Returns:
+        List of PaneSplit for agents 1..N-1.
+    """
+    if n_agents <= 1:
+        return []
+
+    cols = math.ceil(math.sqrt(n_agents))
+    rows = math.ceil(n_agents / cols)
+
+    # Determine how many rows each column gets.
+    # Total cells = cols * rows >= n_agents. The surplus (cols * rows - n_agents)
+    # empty cells are removed from the *leftmost* columns so that the main pane
+    # (column 0) gets fewer rows and stays larger.
+    surplus = cols * rows - n_agents
+    col_rows: list[int] = []
+    for _c in range(cols):
+        if surplus > 0:
+            col_rows.append(rows - 1)
+            surplus -= 1
+        else:
+            col_rows.append(rows)
+
+    splits: list[PaneSplit] = []
+    agent_idx = 1  # agent 0 is main
+
+    # --- Top row: horizontal splits from main to create columns ---
+    col_names: list[str] = ["main"]  # tracks the current bottom pane name per column
+
+    for c in range(1, cols):
+        remaining_cols = cols - c + 1
+        size = max(1, min(90, 100 // remaining_cols))
+        name = f"agent-{agent_idx}"
+        splits.append(
+            PaneSplit(
+                direction=SplitDirection.HORIZONTAL,
+                size=size,
+                name=name,
+                target="last" if c > 1 else "main",
+            )
+        )
+        col_names.append(name)
+        agent_idx += 1
+
+    # --- Additional rows: vertical splits within each column ---
+    for c in range(cols):
+        for r in range(1, col_rows[c]):
+            if agent_idx >= n_agents:
+                break
+            remaining_rows_in_col = col_rows[c] - r + 1
+            v_size = max(1, min(90, 100 // remaining_rows_in_col))
+            target = col_names[c]
+            name = f"agent-{agent_idx}"
+            splits.append(
+                PaneSplit(
+                    direction=SplitDirection.VERTICAL,
+                    size=v_size,
+                    name=name,
+                    target=target,
+                )
+            )
+            col_names[c] = name
+            agent_idx += 1
+
+    return splits

@@ -4,6 +4,20 @@ All notable changes to cctmux will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-03-28
+
+### Added
+
+- **Team mode**: `cctmux team` command launches multiple Claude Code instances as a coordinated team in a single tmux session
+- **Team configuration** via YAML (`team.yaml` or `.cctmux.yaml` team section) with `TeamAgent`, `TeamLayoutType`, and `TeamConfig` models
+- **Grid, columns, and rows** layout strategies for team panes (`compute_team_layout`)
+- **Per-agent role prompts** and Claude CLI args — each agent gets `--append-system-prompt`, `--name`, and `--dangerously-skip-permissions`
+- **Integration with cc2cc** for inter-agent communication — each agent gets a unique `CC2CC_SESSION_ID` to avoid session file races
+- **Shared task list** support via `CLAUDE_CODE_TASK_LIST_ID`
+- **`cc-team-lead` skill**: team coordination workflow guiding task creation, agent delegation, progress tracking, and cc2cc communication — includes prerequisite check for cc2cc availability
+- **Example team config** at `examples/team.yaml` with 6-agent full-stack team (backend-design, frontend-design, backend-impl, frontend-impl, reviewer, qa)
+- **Multi-skill install**: `cctmux install-skill` and auto-sync now handle all bundled skills (cc-tmux + cc-team-lead)
+
 ## [0.2.13] - 2026-03-01
 
 ### Added

@@ -1383,6 +1383,17 @@ cctmux-activity --preset debug
 
 CLI flags override both config file and preset values.
 
+## Team Mode
+
+When running inside a team session (`cctmux team`), the same pane management commands work — each agent has its own pane in the shared tmux session. Additional team-specific environment variables are available:
+
+| Variable | Description |
+|----------|-------------|
+| `CC2CC_SESSION_ID` | Unique per-pane session ID for cc2cc communication |
+| `CLAUDE_CODE_TASK_LIST_ID` | Shared task list ID (when `shared_task_list` is enabled) |
+
+For team coordination workflows (task delegation, inter-agent messaging, progress tracking), see the **cc-team-lead** skill.
+
 ## Troubleshooting
 
 ### "Not in cctmux session"

@@ -13,6 +13,7 @@ Complete reference for cctmux configuration options, presets, and customization.
 - [Presets](#presets)
 - [CLI Overrides](#cli-overrides)
 - [Environment Variables](#environment-variables)
+- [Team Configuration](#team-configuration)
 - [Related Documentation](#related-documentation)
 
 ## Overview
@@ -643,6 +644,75 @@ cctmux -A
 ```
 
 This sets `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`, enabling Claude Code's experimental agent teams feature.
+
+## Team Configuration
+
+The `team:` section configures multi-agent team mode. It can be defined in `.cctmux.yaml` or in a standalone YAML file (e.g., `team.yaml`).
+
+### TeamConfig Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `name` | string | project name | Team name (used for session naming) |
+| `shared_task_list` | boolean | `true` | Share `CLAUDE_CODE_TASK_LIST_ID` across all agents |
+| `layout` | string | `grid` | Pane layout strategy: `grid`, `columns`, or `rows` |
+| `monitor` | boolean | `false` | Add a cctmux-tasks monitor pane |
+| `agents` | list | (required) | List of agent definitions |
+
+### TeamAgent Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `role` | string | (required) | Agent role name (e.g., `architect`, `implementer`) |
+| `prompt` | string | `""` | Role-specific system prompt injected via `--append-system-prompt` |
+| `claude_args` | string | `null` | Per-agent Claude CLI arg overrides (e.g., `--model sonnet`) |
+
+### Standalone Team File
+
+A standalone `team.yaml` wraps the config under a `team:` key:
+
+```yaml
+team:
+  name: my-team
+  shared_task_list: true
+  layout: grid
+  monitor: true
+  agents:
+    - role: architect
+      prompt: |
+        You lead the team. Create tasks, review work, coordinate via cc2cc.
+    - role: implementer
+      prompt: |
+        Pick up tasks and implement them.
+    - role: tester
+      prompt: |
+        Write and run tests for completed features.
+```
+
+### Embedded in .cctmux.yaml
+
+The same `team:` key can be added to a project's `.cctmux.yaml`:
+
+```yaml
+default_layout: cc-mon
+task_list_id: true
+
+team:
+  layout: columns
+  agents:
+    - role: frontend
+      prompt: "Implement frontend components."
+    - role: backend
+      prompt: "Implement API endpoints."
+```
+
+### Layout Strategies
+
+| Layout | Description |
+|--------|-------------|
+| `grid` | Arranges agent panes in a balanced N-column grid (default) |
+| `columns` | All panes side-by-side horizontally |
+| `rows` | All panes stacked vertically |
 
 ## Related Documentation
 

@@ -10,6 +10,7 @@ Get started with cctmux in minutes. This guide covers installation, basic usage,
 - [Monitoring Tools](#monitoring-tools)
 - [Ralph Loop](#ralph-loop)
 - [Layouts](#layouts)
+- [Team Mode Quick Start](#team-mode-quick-start)
 - [Next Steps](#next-steps)
 
 ## Prerequisites
@@ -355,6 +356,37 @@ cctmux -l git-mon
 │              │             │
 └──────────────┴─────────────┘
 ```
+
+## Team Mode Quick Start
+
+Launch multiple Claude Code instances as a coordinated team.
+
+**Prerequisites:** cc2cc hub running, cc2cc plugin installed in Claude Code.
+
+### 1. Create a Team Config
+
+```yaml
+# team.yaml
+team:
+  name: my-team
+  shared_task_list: true
+  layout: grid
+  agents:
+    - role: architect
+      prompt: |
+        You lead the team. Create tasks, review work, coordinate via cc2cc.
+    - role: implementer
+      prompt: |
+        Pick up tasks and implement them.
+```
+
+### 2. Launch the Team
+
+```bash
+cctmux team team.yaml
+```
+
+This creates a tmux session with one pane per agent. Each agent runs Claude Code with its role-specific prompt and communicates with other agents via cc2cc.
 
 ## Next Steps
 

@@ -12,6 +12,7 @@ Complete reference for all cctmux command-line tools. Each tool includes all ava
 - [cctmux-activity](#cctmux-activity)
 - [cctmux-git](#cctmux-git)
 - [cctmux-ralph](#cctmux-ralph)
+- [cctmux team](#cctmux-team)
 - [Common Patterns](#common-patterns)
 - [Related Documentation](#related-documentation)
 
@@ -713,6 +714,57 @@ cctmux-ralph cancel
 - **Task Progress**: Checklist completion tracking
 - **Prompt Preview**: Current iteration prompt (optional, shown with verbose/debug presets)
 - **Dynamic Sizing**: Panels adapt to terminal height, distributing rows proportionally between task progress and iteration table
+
+## cctmux team
+
+Launch multiple Claude Code instances as a coordinated team in a single tmux session. Each agent gets its own pane with a role-specific system prompt and communicates via cc2cc.
+
+### Synopsis
+
+```bash
+cctmux team [TEAM_FILE] [OPTIONS]
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `TEAM_FILE` | Path to a team YAML file (optional; defaults to reading `team:` from `.cctmux.yaml`) |
+
+### Options
+
+| Option | Short | Description | Default |
+|--------|-------|-------------|---------|
+| `--dry-run` | `-n` | Preview tmux commands without executing | `false` |
+| `--status-bar` | `-s` | Enable status bar with git/project info | `false` |
+| `--verbose` | `-v` | Increase verbosity (stackable) | `0` |
+| `--debug` | `-D` | Enable debug output | `false` |
+
+### Description
+
+Creates a tmux session with one pane per agent defined in the team config. Each pane runs Claude Code with:
+- A unique `CC2CC_SESSION_ID` to avoid session file races
+- `--append-system-prompt` with the agent's role prompt
+- `--name` set to the agent's role
+- Shared `CLAUDE_CODE_TASK_LIST_ID` when `shared_task_list` is enabled
+
+All agents auto-subscribe to the project's cc2cc topic for inter-agent communication.
+
+### Examples
+
+```bash
+# Launch team from standalone config
+cctmux team team.yaml
+
+# Launch team from .cctmux.yaml team: section
+cctmux team
+
+# Preview what would happen
+cctmux team team.yaml --dry-run
+
+# Launch with status bar
+cctmux team team.yaml -s
+```
 
 ## Common Patterns
 

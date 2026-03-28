@@ -12,9 +12,11 @@ from cctmux.config import (
     ConfigPreset,
     CustomLayout,
     LayoutType,
+    TeamConfig,
     display_config_warnings,
     get_preset_config,
     load_config,
+    load_team_config,
     save_config,
     validate_layout_name,
 )
@@ -38,7 +40,7 @@ from cctmux.subagent_monitor import (
     run_subagent_monitor,
 )
 from cctmux.task_monitor import list_sessions, run_monitor
-from cctmux.tmux_manager import attach_session, create_session, is_inside_tmux, session_exists
+from cctmux.tmux_manager import attach_session, create_session, create_team_session, is_inside_tmux, session_exists
 from cctmux.utils import get_project_name, is_fzf_available, sanitize_session_name, select_with_fzf
 from cctmux.xdg_paths import ensure_directories, get_config_file_path
 
@@ -60,61 +62,75 @@ def version_callback(value: bool) -> None:
 
 
 def _sync_skill() -> None:
-    """Auto-install the bundled cc-tmux skill if missing or outdated.
+    """Auto-install bundled skills if missing or outdated.
 
     Compares the content hash of each bundled file against the installed copy.
     Runs silently; prints a one-line notice only when an update is applied.
     Called automatically on every cctmux invocation so 'uv tool upgrade'
-    keeps the skill in sync without requiring a manual 'cctmux install-skill'.
+    keeps skills in sync without requiring a manual 'cctmux install-skill'.
     """
     import hashlib
     import shutil
 
-    skill_src = Path(__file__).parent / "skill" / "cc-tmux"
-    skill_dest = Path.home() / ".claude" / "skills" / "cc-tmux"
+    skill_base = Path(__file__).parent / "skill"
+    dest_base = Path.home() / ".claude" / "skills"
 
-    if not skill_src.exists():
+    if not skill_base.exists():
         return
 
     def _md5(path: Path) -> str:
         return hashlib.md5(path.read_bytes()).hexdigest()  # noqa: S324
 
-    needs_update = False
-    for src_file in skill_src.iterdir():
-        if not src_file.is_file():
+    for skill_src in skill_base.iterdir():
+        if not skill_src.is_dir():
             continue
-        dest_file = skill_dest / src_file.name
-        if not dest_file.exists() or _md5(src_file) != _md5(dest_file):
-            needs_update = True
-            break
+        skill_dest = dest_base / skill_src.name
 
-    if needs_update:
-        skill_dest.mkdir(parents=True, exist_ok=True)
+        needs_update = False
         for src_file in skill_src.iterdir():
-            if src_file.is_file():
-                shutil.copy2(src_file, skill_dest / src_file.name)
-        console.print(f"[dim]✓ cc-tmux skill updated ({skill_dest})[/]")
+            if not src_file.is_file():
+                continue
+            dest_file = skill_dest / src_file.name
+            if not dest_file.exists() or _md5(src_file) != _md5(dest_file):
+                needs_update = True
+                break
+
+        if needs_update:
+            skill_dest.mkdir(parents=True, exist_ok=True)
+            for src_file in skill_src.iterdir():
+                if src_file.is_file():
+                    shutil.copy2(src_file, skill_dest / src_file.name)
+            console.print(f"[dim]✓ {skill_src.name} skill updated ({skill_dest})[/]")
 
 
 @app.command()
 def install_skill() -> None:
-    """Install the cc-tmux skill to ~/.claude/skills/."""
+    """Install all bundled skills to ~/.claude/skills/."""
     import shutil
 
-    skill_src = Path(__file__).parent / "skill" / "cc-tmux"
-    skill_dest = Path.home() / ".claude" / "skills" / "cc-tmux"
+    skill_base = Path(__file__).parent / "skill"
+    dest_base = Path.home() / ".claude" / "skills"
 
-    if not skill_src.exists():
+    if not skill_base.exists():
         err_console.print("[red]Error:[/] Skill source not found.")
         raise typer.Exit(1)
 
-    skill_dest.mkdir(parents=True, exist_ok=True)
+    installed = 0
+    for skill_src in skill_base.iterdir():
+        if not skill_src.is_dir():
+            continue
+        skill_dest = dest_base / skill_src.name
+        skill_dest.mkdir(parents=True, exist_ok=True)
 
-    for item in skill_src.iterdir():
-        if item.is_file():
-            shutil.copy2(item, skill_dest / item.name)
+        for item in skill_src.iterdir():
+            if item.is_file():
+                shutil.copy2(item, skill_dest / item.name)
 
-    console.print(f"[green]✓[/] Skill installed to {skill_dest}")
+        console.print(f"[green]✓[/] {skill_src.name} installed to {skill_dest}")
+        installed += 1
+
+    if installed == 0:
+        err_console.print("[yellow]No skills found to install.[/]")
 
 
 @app.callback(invoke_without_command=True)
@@ -1532,6 +1548,91 @@ def layout_edit(
         console.print(f"[green]✓[/] Custom layout '{updated_layout.name}' updated.")
     finally:
         Path(tmp_path).unlink(missing_ok=True)
+
+
+team_app = typer.Typer(
+    name="team",
+    help="Launch a team of Claude Code instances.",
+)
+app.add_typer(team_app, name="team")
+
+
+@team_app.callback(invoke_without_command=True)
+def team_launch(
+    team_file: Annotated[Path | None, typer.Argument(help="Team config YAML file.")] = None,
+    dry_run: Annotated[bool, typer.Option("--dry-run", "-n", help="Preview tmux commands without executing.")] = False,
+    status_bar: Annotated[bool, typer.Option("--status-bar", "-s", help="Enable tmux status bar.")] = False,
+    verbose: Annotated[int, typer.Option("--verbose", "-v", count=True, help="Increase verbosity.")] = 0,
+    debug: Annotated[bool, typer.Option("--debug", "-D", help="Enable debug output.")] = False,
+) -> None:
+    """Launch a team of Claude Code instances in a single tmux session.
+
+    Each agent gets its own pane with a role-specific system prompt.
+    All agents auto-subscribe to the project's cc2cc topic for communication.
+
+    If TEAM_FILE is provided, load team config from that YAML file.
+    Otherwise, look for a 'team:' section in .cctmux.yaml.
+    """
+    project_dir = Path.cwd()
+
+    # Resolve team configuration
+    team: TeamConfig | None = None
+    if team_file is not None:
+        if not team_file.exists():
+            err_console.print(f"[red]Error:[/] Team file not found: {team_file}")
+            raise typer.Exit(1)
+        try:
+            team = load_team_config(team_file)
+        except (ValueError, FileNotFoundError) as e:
+            err_console.print(f"[red]Error:[/] Failed to load team config: {e}")
+            raise typer.Exit(1) from None
+    else:
+        config, config_warnings = load_config(project_dir=project_dir)
+        if config_warnings:
+            display_config_warnings(config_warnings, err_console)
+        team = config.team
+
+    if team is None:
+        err_console.print("[red]Error:[/] No team configuration found.")
+        err_console.print("[dim]Provide a team YAML file or add a 'team:' section to .cctmux.yaml.[/]")
+        raise typer.Exit(1)
+
+    # Derive session name (same sanitization as the main launcher)
+    session_name = sanitize_session_name(get_project_name(project_dir))
+
+    if debug or verbose > 0:
+        console.print(f"[dim]Session: {session_name}[/]")
+        console.print(f"[dim]Project: {project_dir}[/]")
+        console.print(f"[dim]Agents: {len(team.agents)}[/]")
+
+    # Refuse to launch from inside tmux
+    if is_inside_tmux():
+        err_console.print("[red]Error:[/] Already inside a tmux session.")
+        err_console.print("[dim]Use standard tmux commands to manage panes.[/]")
+        raise typer.Exit(1)
+
+    # Check for existing session
+    if session_exists(session_name):
+        err_console.print(f"[yellow]Session already exists:[/] {session_name}")
+        err_console.print("[dim]Attach with: tmux attach -t {session_name}[/]")
+        raise typer.Exit(1)
+
+    if verbose > 0 or dry_run:
+        console.print(f"[green]Creating team session:[/] {session_name}")
+
+    commands = create_team_session(
+        session_name=session_name,
+        project_dir=project_dir,
+        team=team,
+        status_bar=status_bar,
+        dry_run=dry_run,
+    )
+
+    if dry_run:
+        console.print("[yellow]Commands that would be executed:[/]")
+        for cmd in commands:
+            console.print(f"  {cmd}")
+        console.print("[dim]Note: Actual execution uses pane IDs (%%N) for reliable targeting.[/]")
 
 
 if __name__ == "__main__":

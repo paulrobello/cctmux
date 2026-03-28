@@ -337,7 +337,7 @@ class TestApplyCustomLayout:
                 PaneSplit(direction=SplitDirection.HORIZONTAL, size=40),
             ],
         )
-        commands = apply_custom_layout("test-session", layout, dry_run=True)
+        commands, _registry = apply_custom_layout("test-session", layout, dry_run=True)
         # 1: split, 2: focus main
         assert len(commands) == 2
         assert "split-window" in commands[0]
@@ -353,7 +353,7 @@ class TestApplyCustomLayout:
                 PaneSplit(direction=SplitDirection.HORIZONTAL, size=40, command="htop"),
             ],
         )
-        commands = apply_custom_layout("test-session", layout, dry_run=True)
+        commands, _registry = apply_custom_layout("test-session", layout, dry_run=True)
         # 1: split, 2: send-keys htop, 3: focus main
         assert len(commands) == 3
         assert "htop" in commands[1]
@@ -368,7 +368,7 @@ class TestApplyCustomLayout:
                 PaneSplit(direction=SplitDirection.VERTICAL, size=50, target="right"),
             ],
         )
-        commands = apply_custom_layout("test-session", layout, dry_run=True)
+        commands, _registry = apply_custom_layout("test-session", layout, dry_run=True)
         # 1: split h, 2: split v, 3: focus main
         assert len(commands) == 3
         assert "-h" in commands[0]
@@ -383,7 +383,7 @@ class TestApplyCustomLayout:
             ],
             focus_main=True,
         )
-        commands = apply_custom_layout("test-session", layout, dry_run=True)
+        commands, _registry = apply_custom_layout("test-session", layout, dry_run=True)
         # Last command should focus the split pane (index 1), not main (0)
         assert "select-pane" in commands[-1]
         assert "0.1" in commands[-1]
@@ -391,13 +391,13 @@ class TestApplyCustomLayout:
     def test_no_splits_no_focus(self) -> None:
         """Should handle empty layout (no splits, no focus command if focus_main=False)."""
         layout = CustomLayout(name="empty", focus_main=False)
-        commands = apply_custom_layout("test-session", layout, dry_run=True)
+        commands, _registry = apply_custom_layout("test-session", layout, dry_run=True)
         assert commands == []
 
     def test_empty_splits_with_focus_main(self) -> None:
         """Should focus main even with no splits if focus_main=True."""
         layout = CustomLayout(name="empty-focus", focus_main=True)
-        commands = apply_custom_layout("test-session", layout, dry_run=True)
+        commands, _registry = apply_custom_layout("test-session", layout, dry_run=True)
         assert len(commands) == 1
         assert "select-pane" in commands[0]
 
@@ -416,7 +416,7 @@ class TestApplyCustomLayout:
                 ),
             ],
         )
-        commands = apply_custom_layout("test-session", layout, dry_run=True)
+        commands, _registry = apply_custom_layout("test-session", layout, dry_run=True)
         # split + send-keys + split + send-keys + focus = 5
         assert len(commands) == 5
         assert "cctmux-session" in commands[1]

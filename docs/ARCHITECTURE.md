@@ -11,6 +11,7 @@ System design and data flow for cctmux. This document describes how the componen
 - [Module Structure](#module-structure)
 - [Configuration System](#configuration-system)
 - [Layout System](#layout-system)
+- [Team Mode](#team-mode)
 - [Related Documentation](#related-documentation)
 
 ## Overview
@@ -475,6 +476,36 @@ Each layout function follows a consistent pattern for reliable pane targeting:
 4. Returns focus to the main pane using the captured main pane ID
 
 Pane IDs (`%N` format) are used instead of positional indices (`session:window.N`) because tmux pane indices do not always start at zero and can shift after splits. In `dry_run=True` mode, positional indices are used as fallback placeholders since no actual panes exist.
+
+## Team Mode
+
+Team mode launches N Claude Code instances in a single tmux session, each with its own role and system prompt.
+
+### Session Creation
+
+`create_team_session()` in `tmux_manager.py`:
+1. Creates a new tmux session named after the team (or project)
+2. Calls `compute_team_layout()` to determine pane split dimensions based on the chosen strategy (`grid`, `columns`, or `rows`)
+3. Splits the session window into N panes using the computed dimensions
+4. For each pane, sets environment variables and sends the `claude` command with role-specific flags
+
+### Layout Computation
+
+`compute_team_layout()` in `layouts.py` accepts the agent count and layout strategy:
+- **grid** — arranges panes in a balanced grid (e.g., 2x2 for 4 agents)
+- **columns** — all panes side-by-side horizontally
+- **rows** — all panes stacked vertically
+
+### Per-Pane Environment
+
+Each agent pane receives:
+- `CC2CC_SESSION_ID` — unique per pane (prevents session file races between agents)
+- `CLAUDE_CODE_TASK_LIST_ID` — shared across all panes when `shared_task_list` is enabled
+- `CCTMUX_SESSION` and `CCTMUX_PROJECT_DIR` — standard cctmux env vars
+
+### cc2cc Integration
+
+Each agent is launched with `--append-system-prompt` containing the role prompt from the team config and `--name` set to the role name. All agents auto-subscribe to the project's cc2cc topic on connect, enabling inter-agent communication through the cc2cc hub.
 
 ## Related Documentation
 

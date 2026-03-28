@@ -22,6 +22,7 @@ Launch Claude Code inside tmux with session management, real-time monitoring, an
   - [Git Monitor](#git-monitor-cctmux-git)
   - [Ralph Monitor](#ralph-monitor-cctmux-ralph)
 - [Configuration](#configuration)
+- [Team Mode](#team-mode)
 - [Claude Skill](#claude-skill)
 - [Environment Variables](#environment-variables)
 - [Requirements](#requirements)
@@ -442,20 +443,77 @@ cctmux-ralph --preset verbose
 cctmux init-config
 ```
 
-## Claude Skill
+## Team Mode
 
-Install the skill for Claude to manage tmux panes:
+Launch multiple Claude Code instances as a coordinated team in a single tmux session. Each agent gets its own pane with a role-specific system prompt, and all agents communicate via the [cc2cc](https://github.com/paulrobello/cc2cc) plugin.
+
+### Usage
+
+```bash
+# From a standalone team config file
+cctmux team team.yaml
+
+# From .cctmux.yaml (reads the team: section)
+cctmux team
+
+# Preview without executing
+cctmux team team.yaml --dry-run
+```
+
+### Team Configuration
+
+```yaml
+team:
+  name: my-team              # optional; defaults to project name
+  shared_task_list: true     # all instances share CLAUDE_CODE_TASK_LIST_ID
+  layout: grid               # "grid", "columns", or "rows"
+  monitor: true              # add a cctmux-tasks monitor pane
+  agents:
+    - role: architect
+      prompt: |
+        You lead the team. Create tasks, review work, coordinate via cc2cc.
+    - role: implementer
+      prompt: |
+        Pick up tasks and implement them.
+    - role: tester
+      prompt: |
+        Write and run tests for completed features.
+```
+
+**Requirements:** cc2cc hub running, cc2cc plugin installed. All agents auto-subscribe to the project's cc2cc topic and share a `CLAUDE_CODE_TASK_LIST_ID` when `shared_task_list` is enabled.
+
+**Permissions:** All team agents are launched with `--dangerously-skip-permissions` so they can operate autonomously without interactive prompts.
+
+**Layout options:** `grid` (default) arranges panes in an N-column grid, `columns` stacks panes side-by-side, `rows` stacks panes top-to-bottom.
+
+## Claude Skills
+
+Install all bundled skills:
 
 ```bash
 cctmux install-skill
 ```
 
-Once installed, Claude can:
+Skills are also auto-synced on every `cctmux` invocation.
+
+### cc-tmux
+
+Pane management — Claude can:
 
 - **Discover Session Context**: Access `$CCTMUX_SESSION` and `$CCTMUX_PROJECT_DIR`
 - **Create Panes**: Split windows for dev servers, file watchers, test runners
 - **Manage Processes**: Start, stop, and restart background processes
 - **Navigate Panes**: Move focus between panes programmatically
+
+### cc-team-lead
+
+Team coordination workflow for leading a `cctmux team` session. Invoke with `/cc-team-lead`. Covers:
+
+- **Prerequisites check** — verifies cc2cc plugin is installed and hub is reachable
+- **Task creation** — naming conventions, dependency ordering, example tasks
+- **Team communication** — topic broadcasts, direct messages, role-based routing
+- **Progress monitoring** — shared task list, monitor pane, direct check-ins
+- **Issue handling** — stuck agents, merge conflicts, failing checks
 
 ### Using the Skill
 

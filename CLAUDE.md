@@ -71,6 +71,26 @@ src/cctmux/
 - Claude subagents: `~/.claude/projects/<encoded-path>/agent-*.jsonl` or `<session-id>/subagents/agent-*.jsonl`
 - Ralph state: `$PROJECT/.claude/ralph-state.json`
 
+## Team Mode
+
+The `cctmux team` subcommand launches N Claude Code instances as a coordinated team in one tmux session.
+
+**New config models** (`config.py`):
+- `TeamAgent` — per-agent role, permission mode, system prompt, and optional Claude args
+- `TeamLayoutType` — `StrEnum` with `grid`, `columns`, `rows`
+- `TeamConfig` — team name, agents list, layout, shared task list flag, monitor flag
+
+**New functions**:
+- `compute_team_layout()` (`layouts.py`) — computes tmux split dimensions for N agent panes using grid/columns/rows strategies
+- `create_team_session()` (`tmux_manager.py`) — creates the tmux session, applies the computed layout, and launches Claude in each pane with unique `CC2CC_SESSION_ID`, role-specific `--append-system-prompt`, and `--name`
+- `load_team_config()` (`config.py`) — loads team config from standalone YAML or the `team:` key in `.cctmux.yaml`
+
+**New subcommand**: `cctmux team [team.yaml]` — registered in `__main__.py`
+
+**Key env var**: `CC2CC_SESSION_ID` is set per-pane to a unique value so each agent gets its own cc2cc session file, avoiding file races.
+
+**Claude flags per agent**: `--append-system-prompt` injects the role prompt, `--name` labels the instance.
+
 ## Change Checklist
 
 When adding or modifying tools, CLI options, layouts, or monitors, always update **all** of the following:

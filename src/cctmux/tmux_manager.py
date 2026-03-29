@@ -172,6 +172,10 @@ def _build_claude_cmd(
     # Load cc2cc development channel for team communication
     parts.append("--dangerously-load-development-channels plugin:cc2cc@probello-local")
 
+    # Per-agent model flag
+    if agent.model:
+        parts.append(f"--model {agent.model}")
+
     # Per-agent args override default
     extra_args = agent.claude_args or default_args
     if extra_args:

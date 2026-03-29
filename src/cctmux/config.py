@@ -173,6 +173,7 @@ class TeamAgent(BaseModel):
 
     role: str  # e.g., "architect"
     prompt: str = ""  # role instructions (appended to system prompt)
+    model: str | None = None  # claude model to use (e.g., "sonnet", "opus")
     claude_args: str | None = None  # per-agent claude CLI arg overrides
 
 

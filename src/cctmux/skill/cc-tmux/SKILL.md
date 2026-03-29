@@ -1392,6 +1392,30 @@ When running inside a team session (`cctmux team`), the same pane management com
 | `CC2CC_SESSION_ID` | Unique per-pane session ID for cc2cc communication |
 | `CLAUDE_CODE_TASK_LIST_ID` | Shared task list ID (when `shared_task_list` is enabled) |
 
+### Team Agent Configuration
+
+Each agent in the team config supports these fields:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `role` | string | (required) | Agent role name (e.g., `architect`, `implementer`) |
+| `prompt` | string | `""` | Role-specific system prompt injected via `--append-system-prompt` |
+| `model` | string | `null` | Claude model to use via `--model` (e.g., `sonnet`, `opus`) |
+| `claude_args` | string | `null` | Per-agent Claude CLI arg overrides |
+
+```yaml
+team:
+  agents:
+    - role: architect
+      model: opus
+      prompt: |
+        You lead the team.
+    - role: tester
+      model: sonnet
+      prompt: |
+        Write and run tests.
+```
+
 For team coordination workflows (task delegation, inter-agent messaging, progress tracking), see the **cc-team-lead** skill.
 
 ## Troubleshooting

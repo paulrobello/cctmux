@@ -665,7 +665,8 @@ The `team:` section configures multi-agent team mode. It can be defined in `.cct
 |-------|------|---------|-------------|
 | `role` | string | (required) | Agent role name (e.g., `architect`, `implementer`) |
 | `prompt` | string | `""` | Role-specific system prompt injected via `--append-system-prompt` |
-| `claude_args` | string | `null` | Per-agent Claude CLI arg overrides (e.g., `--model sonnet`) |
+| `model` | string | `null` | Claude model to use via `--model` (e.g., `sonnet`, `opus`) |
+| `claude_args` | string | `null` | Per-agent Claude CLI arg overrides |
 
 ### Standalone Team File
 
@@ -679,12 +680,15 @@ team:
   monitor: true
   agents:
     - role: architect
+      model: opus
       prompt: |
         You lead the team. Create tasks, review work, coordinate via cc2cc.
     - role: implementer
+      model: opus
       prompt: |
         Pick up tasks and implement them.
     - role: tester
+      model: sonnet
       prompt: |
         Write and run tests for completed features.
 ```

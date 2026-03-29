@@ -153,7 +153,8 @@ cctmux team
 |-------|------|---------|-------------|
 | `role` | string | (required) | Agent role name (e.g., `architect`, `implementer`) |
 | `prompt` | string | `""` | Role-specific system prompt injected via `--append-system-prompt` |
-| `claude_args` | string | `null` | Per-agent Claude CLI arg overrides (e.g., `--model sonnet`) |
+| `model` | string | `null` | Claude model to use via `--model` (e.g., `sonnet`, `opus`) |
+| `claude_args` | string | `null` | Per-agent Claude CLI arg overrides |
 
 ## Layout Strategies
 

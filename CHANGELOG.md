@@ -4,6 +4,12 @@ All notable changes to cctmux will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.1] - 2026-03-28
+
+### Added
+
+- **Per-agent `model` field** in team config — set `model: opus` or `model: sonnet` on each `TeamAgent` to pass `--model` to the launched Claude instance, independent of `claude_args`
+
 ## [0.3.0] - 2026-03-28
 
 ### Added

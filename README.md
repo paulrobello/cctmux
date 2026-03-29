@@ -470,12 +470,15 @@ team:
   monitor: true              # add a cctmux-tasks monitor pane
   agents:
     - role: architect
+      model: opus
       prompt: |
         You lead the team. Create tasks, review work, coordinate via cc2cc.
     - role: implementer
+      model: opus
       prompt: |
         Pick up tasks and implement them.
     - role: tester
+      model: sonnet
       prompt: |
         Write and run tests for completed features.
 ```

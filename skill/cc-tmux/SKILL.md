@@ -266,7 +266,7 @@ cctmux supports several predefined layouts via the `--layout` / `-l` option:
 | `full-monitor` | Claude + session + tasks + activity dashboard |
 | `dashboard` | Large activity dashboard with session sidebar |
 | `ralph` | Shell + ralph monitor side-by-side (60/40) |
-| `ralph-full` | Claude + git monitor + ralph monitor + task monitor (2x2 grid) |
+| `ralph-full` | Claude + git monitor + ralph monitor |
 | `git-mon` | Claude (60%) + git status monitor (40%) |
 
 ### CC-Mon Layout
@@ -1114,6 +1114,17 @@ cctmux-agents --no-activity
 
 # Custom poll interval (default 1.0 seconds)
 cctmux-agents -i 0.5
+
+# AI-summarize each agent's initial prompt via claude haiku (done once per agent)
+cctmux-agents --summarize
+cctmux-agents -S
+
+# Hide agents inactive for more than 10 minutes (default 300s); 0 = show all
+cctmux-agents -t 600
+cctmux-agents -t 0
+
+# Limit table to 5 agents (0 = unlimited)
+cctmux-agents -M 5
 ```
 
 ### Subagent Monitor in a Pane
@@ -1129,7 +1140,7 @@ tmux send-keys -t "$AGENT_PANE" "cctmux-agents" Enter
 ### Display Features
 
 - **Stats Panel**: Total subagents, active/completed counts, aggregate token usage, top tools across all agents
-- **Agent Table**: Name/slug, model, duration, tokens (in→out), top tools, current activity
+- **Agent Table**: Agent ID + task description, model, duration, tokens (in→out), top tools, current activity
 - **Activity Panel**: Recent activities across all agents with timestamps and agent IDs
 - **Status Indicators**: `○` unknown, `◐` active, `●` completed
 - **Real-time Updates**: Polls agent files and updates display automatically
@@ -1138,12 +1149,16 @@ tmux send-keys -t "$AGENT_PANE" "cctmux-agents" Enter
 ### Subagent Information
 
 Each subagent displays:
-- **Display Name**: Human-readable slug (e.g., "dreamy-mapping-naur") or agent ID
+- **Agent Name**: When multiple agents share the same session slug, shows `<agent-id> · <task>` where task is either the first 64 chars of the initial prompt or an AI-generated summary (with `--summarize`)
 - **Model**: The Claude model being used (haiku, sonnet, opus)
 - **Duration**: How long the agent has been running
 - **Tokens**: Input and output token counts
 - **Tools**: Most frequently used tools with counts
 - **Current Activity**: Latest tool call, thinking, or text output
+
+### Task Summarization (`--summarize`)
+
+When `--summarize` / `-S` is passed, each newly discovered agent's initial prompt is sent once to `claude-haiku` to generate a concise ≤64-character summary of what the agent was asked to do. This runs in a background thread pool (up to 4 concurrent summarizations) and the display updates automatically when summaries arrive. Without this flag, the first 64 characters of the raw initial prompt are shown as a fallback.
 
 ### Subagent File Location
 
@@ -1255,10 +1270,10 @@ ralph layout:                  ralph-full layout:
 │          │ cctmux-  │       │  CLAUDE   │ cctmux-  │
 │  shell   │ ralph    │       │   50%     │ ralph    │
 │  60%     │   40%    │       │  ~12%h    │  ~77%h   │
-│          │          │       ├──────────┤├──────────┤
-│          │          │       │ cctmux-  ││ cctmux-  │
-│          │          │       │ git      ││ tasks -g │
-└──────────┴──────────┘       │  ~88%h   ││  ~23%h   │
+│          │          │       ├──────────┤│          │
+│          │          │       │ cctmux-  ││          │
+│          │          │       │ git      ││          │
+└──────────┴──────────┘       │  ~88%h   ││          │
                               └──────────┴──────────┘
 ```
 
@@ -1286,10 +1301,6 @@ tmux send-keys -t "$RIGHT_PANE" "cctmux-ralph" Enter
 # Split main pane vertically — bottom-left ~88% for git monitor
 BOTTOM_LEFT=$(tmux split-window -d -P -F "#{pane_id}" -t "$MAIN_PANE" -v -p 88)
 tmux send-keys -t "$BOTTOM_LEFT" "cctmux-git" Enter
-
-# Split right pane vertically — bottom-right ~23% for task monitor
-BOTTOM_RIGHT=$(tmux split-window -d -P -F "#{pane_id}" -t "$RIGHT_PANE" -v -p 23)
-tmux send-keys -t "$BOTTOM_RIGHT" "cctmux-tasks -g" Enter
 ```
 
 ### State File
@@ -1371,6 +1382,41 @@ cctmux-activity --preset debug
 ```
 
 CLI flags override both config file and preset values.
+
+## Team Mode
+
+When running inside a team session (`cctmux team`), the same pane management commands work — each agent has its own pane in the shared tmux session. Additional team-specific environment variables are available:
+
+| Variable | Description |
+|----------|-------------|
+| `CC2CC_SESSION_ID` | Unique per-pane session ID for cc2cc communication |
+| `CLAUDE_CODE_TASK_LIST_ID` | Shared task list ID (when `shared_task_list` is enabled) |
+
+### Team Agent Configuration
+
+Each agent in the team config supports these fields:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `role` | string | (required) | Agent role name (e.g., `architect`, `implementer`) |
+| `prompt` | string | `""` | Role-specific system prompt injected via `--append-system-prompt` |
+| `model` | string | `null` | Claude model to use via `--model` (e.g., `sonnet`, `opus`) |
+| `claude_args` | string | `null` | Per-agent Claude CLI arg overrides |
+
+```yaml
+team:
+  agents:
+    - role: architect
+      model: opus
+      prompt: |
+        You lead the team.
+    - role: tester
+      model: sonnet
+      prompt: |
+        Write and run tests.
+```
+
+For team coordination workflows (task delegation, inter-agent messaging, progress tracking), see the **cc-team-lead** skill.
 
 ## Troubleshooting
 

@@ -1163,7 +1163,7 @@ def _compute_grid_splits(n_agents: int) -> list[PaneSplit]:
                 direction=SplitDirection.HORIZONTAL,
                 size=size,
                 name=name,
-                target="last" if c > 1 else "main",
+                target="main",
             )
         )
         col_names.append(name)

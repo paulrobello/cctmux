@@ -31,16 +31,20 @@ team:
         Write and run tests.
 ```
 
-## Accepting Skill Prompts in Agent Panes
+## Accepting the cc2cc Channel Prompt in Agent Panes
 
-After team agents launch and load their skills (e.g., the cc-tmux skill), they may present a prompt question that requires pressing Enter to accept. The team lead must send Enter to each agent pane via tmux so agents can proceed:
+After team agents launch, Claude prompts them to accept the cc2cc channel load. Pressing Enter accepts the prompt and allows the agent to proceed.
+
+**Team-lead pane (agent-0):** `cctmux team` automatically sends Enter after a 3-second delay, so the lead's channel prompt is accepted without manual intervention.
+
+**Other agent panes:** The team lead must send Enter to each remaining agent pane:
 
 ```bash
 # List agent panes (exclude the lead's own pane)
 MAIN_PANE=$(tmux display-message -t "$CCTMUX_SESSION" -p "#{pane_id}")
 AGENT_PANES=$(tmux list-panes -t "$CCTMUX_SESSION" -F "#{pane_id}" | grep -v "^${MAIN_PANE}$")
 
-# Send Enter to each agent pane to accept the prompt
+# Send Enter to each agent pane to accept the channel prompt
 for PANE_ID in $AGENT_PANES; do
     tmux send-keys -t "$PANE_ID" Enter
 done

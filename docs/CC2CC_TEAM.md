@@ -235,6 +235,7 @@ The `create_team_session()` function in `tmux_manager.py`:
 2. Calls `compute_team_layout()` to determine pane split dimensions
 3. Splits the session window into N panes using the computed layout
 4. For each pane, exports environment variables and sends the `claude` command with role-specific flags
+5. Waits 3 seconds, then sends Enter to the team-lead pane to accept the cc2cc channel load prompt
 
 ### Per-Pane Environment
 
@@ -264,7 +265,11 @@ Each Claude instance is launched with:
 
 ### Accepting Skill Prompts
 
-After agents launch and load their skills (e.g., cc-tmux), they may present a prompt question that requires pressing Enter to accept. The team lead must send Enter to each agent pane via tmux so agents can proceed:
+After agents launch and load their skills (e.g., cc-tmux), they present a prompt question that requires pressing Enter to accept.
+
+**Team-lead pane (agent-0):** `cctmux team` automatically sends Enter to the team-lead pane after a 3-second delay to accept the cc2cc channel load prompt, so the lead can proceed without manual intervention.
+
+**Other agent panes:** The team lead must send Enter to each remaining agent pane via tmux so they can accept the channel prompt and proceed:
 
 ```bash
 MAIN_PANE=$(tmux display-message -t "$CCTMUX_SESSION" -p "#{pane_id}")

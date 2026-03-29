@@ -2,6 +2,7 @@
 
 import os
 import subprocess
+import time
 import uuid
 from pathlib import Path
 
@@ -358,8 +359,18 @@ def create_team_session(
         status_commands = configure_status_bar(session_name, project_dir, dry_run)
         commands.extend(status_commands)
 
-    # Focus the first (agent-0) pane
+    # Send Enter to team-lead pane after a delay so the cc2cc channel
+    # load prompt has time to appear and can be accepted automatically.
     main_pane = pane_registry.get("main", "")
+    if not dry_run and main_pane:
+        time.sleep(3)
+        enter_cmd = ["tmux", "send-keys", "-t", main_pane, "Enter"]
+        commands.append(f"sleep 3 && {' '.join(enter_cmd)}")
+        subprocess.run(enter_cmd, check=True)
+    else:
+        commands.append(f"sleep 3 && tmux send-keys -t {session_name}:0.0 Enter")
+
+    # Focus the first (agent-0) pane
     if not dry_run and main_pane:
         focus_cmd = ["tmux", "select-pane", "-t", main_pane]
         commands.append(" ".join(focus_cmd))

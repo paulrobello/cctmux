@@ -46,11 +46,13 @@ Load the `cc-tmux` and `cc2cc` skills so you have access to tmux pane management
 /cc2cc
 ```
 
-### 2. Accept skill prompts in agent panes (REQUIRED)
+### 2. Accept cc2cc channel prompts in agent panes (REQUIRED)
 
-**You MUST do this or your team will never come online.** After agents launch, they load skills that present a prompt question requiring Enter to proceed. Without this step, every agent sits idle waiting for input.
+**You MUST do this or your team will never come online.** After agents launch, Claude prompts them to accept the cc2cc channel load. Without pressing Enter, every agent sits idle waiting for input.
 
-Run this immediately after loading your own skills — wait about 5 seconds for agents to finish their initial load, then send Enter to each pane:
+**Your own pane (team-lead) was already auto-accepted** — `cctmux team` sends Enter to the lead pane after a 3-second delay during session creation.
+
+For the remaining agent panes, run this immediately after loading your own skills — wait about 5 seconds for agents to finish their initial load, then send Enter to each pane:
 
 ```bash
 MAIN_PANE=$(tmux display-message -t "$CCTMUX_SESSION" -p "#{pane_id}")

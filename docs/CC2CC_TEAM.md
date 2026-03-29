@@ -19,6 +19,7 @@ Launch and coordinate multiple Claude Code instances as a collaborative team in 
   - [Session Creation](#session-creation)
   - [Per-Pane Environment](#per-pane-environment)
   - [Agent Launch Flags](#agent-launch-flags)
+  - [Accepting Skill Prompts](#accepting-skill-prompts)
   - [cc2cc Integration](#cc2cc-integration)
 - [Designing a Team](#designing-a-team)
   - [Role Separation](#role-separation)
@@ -41,7 +42,7 @@ Launch and coordinate multiple Claude Code instances as a collaborative team in 
 
 **Key Features:**
 - N agents in a single tmux session, each in its own pane
-- Role-specific system prompts injected via `--append-system-prompt`
+- Role-specific system prompts injected via `--append-system-prompt-file`
 - Shared task list across all agents via `CLAUDE_CODE_TASK_LIST_ID`
 - Inter-agent messaging through cc2cc topics and direct messages
 - Three layout strategies: grid, columns, rows
@@ -144,7 +145,7 @@ cctmux team
 | `name` | string | project name | Team name used for session naming |
 | `shared_task_list` | boolean | `true` | Share `CLAUDE_CODE_TASK_LIST_ID` across all agents |
 | `layout` | string | `grid` | Pane layout strategy: `grid`, `columns`, or `rows` |
-| `monitor` | boolean | `false` | Add a `cctmux-tasks` monitor pane at the bottom |
+| `monitor` | boolean | `true` | Add a `cctmux-tasks` monitor pane at the bottom |
 | `agents` | list | (required) | List of `TeamAgent` definitions |
 
 ### TeamAgent Fields
@@ -152,7 +153,7 @@ cctmux team
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `role` | string | (required) | Agent role name (e.g., `architect`, `implementer`) |
-| `prompt` | string | `""` | Role-specific system prompt injected via `--append-system-prompt` |
+| `prompt` | string | `""` | Role-specific system prompt written to a file and injected via `--append-system-prompt-file` |
 | `model` | string | `null` | Claude model to use via `--model` (e.g., `sonnet`, `opus`) |
 | `claude_args` | string | `null` | Per-agent Claude CLI arg overrides |
 
@@ -181,10 +182,11 @@ The grid algorithm calculates dimensions as `cols = ceil(sqrt(n))` and distribut
 
 ### Columns
 
-All agent panes arranged side-by-side horizontally:
+All agent panes arranged side-by-side in equal-width columns:
 
 ```
-3 agents:  [agent-0 | agent-1 | agent-2]
+2 agents:  [  agent-0  50%  |  agent-1  50%  ]
+3 agents:  [ agent-0 33% | agent-1 33% | agent-2 33% ]
 ```
 
 Best for 2-3 agents on wide displays.
@@ -244,16 +246,35 @@ Each agent pane receives these environment variables:
 | `CCTMUX_PROJECT_DIR` | absolute path | Project directory for file operations |
 | `CLAUDE_CODE_TASK_LIST_ID` | session name | Shared task list (when `shared_task_list: true`) |
 | `CC2CC_SESSION_ID` | unique UUID | Per-pane session ID to prevent cc2cc file races |
-| `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | `"1"` | Enable experimental agent teams feature |
+
+> **Note:** `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is only set if the `agent_teams` parameter is explicitly passed to `create_team_session()`. The `cctmux team` command does not enable this by default.
 
 ### Agent Launch Flags
 
 Each Claude instance is launched with:
 
-- `--append-system-prompt` — injects the agent's role prompt
+- `--append-system-prompt-file` — injects the agent's role prompt from a file written to `.cctmux/prompts/<role>.md` (avoids shell quoting issues with tmux send-keys)
 - `--name` — set to the agent's `role` value for identification
 - `--dangerously-skip-permissions` — enables autonomous operation without interactive prompts
+- `--dangerously-load-development-channels plugin:cc2cc@probello-local` — loads the cc2cc plugin for team communication
+- `--model` — per-agent model override (when `model` is set in the agent config)
 - Per-agent `claude_args` — overrides default Claude CLI args when specified
+
+> **Note:** The `.cctmux/` directory is automatically added to `.gitignore` to prevent prompt files from being committed.
+
+### Accepting Skill Prompts
+
+After agents launch and load their skills (e.g., cc-tmux), they may present a prompt question that requires pressing Enter to accept. The team lead must send Enter to each agent pane via tmux so agents can proceed:
+
+```bash
+MAIN_PANE=$(tmux display-message -t "$CCTMUX_SESSION" -p "#{pane_id}")
+AGENT_PANES=$(tmux list-panes -t "$CCTMUX_SESSION" -F "#{pane_id}" | grep -v "^${MAIN_PANE}$")
+for PANE_ID in $AGENT_PANES; do
+    tmux send-keys -t "$PANE_ID" Enter
+done
+```
+
+Wait a few seconds after team launch for agents to finish loading before sending Enter. If sent too early, it will have no effect and must be sent again.
 
 ### cc2cc Integration
 

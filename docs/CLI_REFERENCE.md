@@ -405,7 +405,9 @@ cctmux-agents [OPTIONS] [SESSION_OR_PATH]
 | `--project` | `-p` | Project directory to find sessions for | Current directory |
 | `--interval` | `-i` | Poll interval in seconds | `1.0` |
 | `--inactive-timeout` | `-t` | Hide agents inactive for this many seconds (0 to show all) | `300` |
+| `--max-agents` | `-M` | Maximum agents to show (0 for unlimited) | `20` |
 | `--no-activity` | `-a` | Hide the activity panel | `false` |
+| `--summarize` | `-S` | Use claude haiku to generate a short summary of each agent's initial prompt (done once per agent) | `false` |
 | `--list` | `-l` | List available subagents and exit | `false` |
 | `--version` | | Show version | |
 | `--help` | | Show help | |
@@ -430,6 +432,12 @@ cctmux-agents -t 0
 
 # Hide agents inactive for 10+ minutes
 cctmux-agents -t 600
+
+# Limit to 10 agents
+cctmux-agents -M 10
+
+# AI-summarize each agent's task
+cctmux-agents --summarize
 
 # Fast polling
 cctmux-agents -i 0.5
@@ -518,6 +526,7 @@ cctmux-git [OPTIONS]
 | `--project` | `-p` | Git repository directory | Current directory |
 | `--interval` | `-i` | Poll interval in seconds | `2.0` |
 | `--max-commits` | `-m` | Maximum recent commits to show | `10` |
+| `--max-files` | `-M` | Maximum files to show (0 for unlimited) | `20` |
 | `--no-log` | | Hide recent commits panel | `false` |
 | `--no-diff` | | Hide diff stats panel | `false` |
 | `--no-status` | | Hide file status panel | `false` |
@@ -532,9 +541,9 @@ cctmux-git [OPTIONS]
 
 | Preset | Description |
 |--------|-------------|
-| `minimal` | Hide log and diff panels, show only branch and status; max 5 commits; fetch disabled |
-| `verbose` | All panels visible; max 20 commits; fetch enabled (60s interval) |
-| `debug` | All panels visible; max 30 commits; fetch enabled (30s interval) |
+| `minimal` | Hide log and diff panels, show only branch and status; max 5 commits, 15 files; fetch disabled |
+| `verbose` | All panels visible; max 20 commits, 30 files; fetch enabled (60s interval) |
+| `debug` | All panels visible; max 30 commits, 50 files; fetch enabled (30s interval) |
 
 ### Examples
 
@@ -553,6 +562,9 @@ cctmux-git --no-diff
 
 # Show 20 recent commits
 cctmux-git -m 20
+
+# Limit file list to 10 files
+cctmux-git -M 10
 
 # Enable remote commit checking
 cctmux-git --fetch

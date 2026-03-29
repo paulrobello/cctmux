@@ -4,6 +4,24 @@ All notable changes to cctmux will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.2] - 2026-03-29
+
+### Added
+
+- **Skill progressive disclosure** — split cc-tmux skill into SKILL.md (555 lines) + 5 reference files (monitors, saved-layouts, par-mode, ralph, team) for on-demand loading
+- **Team system prompt loads skills** — agents with "lead" in their role auto-load `/cc-team-lead`, `/cc-tmux`, and `/cc2cc`; other agents auto-load `/cc2cc`
+- **cc-team-lead workflow improvements** — new steps: load skills, accept skill prompts in agent panes, set role before verifying team
+- **cc2cc as Claude Code plugin** — prerequisites check updated from mcpl to Claude Code plugin pattern
+
+### Fixed
+
+- **Equal-width team columns layout** — `_compute_columns_splits()` now splits from main pane instead of last pane, producing equal-width columns (50/50 for 2 agents, 33/33/33 for 3)
+- **Recursive skill installer** — `_sync_skill()` and `install_skill()` now handle subdirectories (e.g., `references/`) via `rglob()`
+
+### Changed
+
+- **Documentation sync** — all 8 docs updated to match implementation: fixed ralph-full layout (3→4 panes), Python version (3.14→3.13), monitor count, `--append-system-prompt-file`, `monitor` default, added missing CLI options and sections
+
 ## [0.3.1] - 2026-03-28
 
 ### Added

@@ -38,7 +38,7 @@ cctmux -l <layout-name>
 | `full-monitor` | 4 | Complete monitoring visibility |
 | `dashboard` | 3 | Usage review and statistics |
 | `ralph` | 2 | Ralph Loop with monitor dashboard |
-| `ralph-full` | 3 | Ralph Loop with git and ralph monitors |
+| `ralph-full` | 4 | Ralph Loop with ralph, git, and task monitors |
 | `git-mon` | 2 | Claude Code with git status monitor |
 
 All layouts keep focus on the main Claude pane after creation, except `dashboard` which focuses the shell pane, and `ralph` which focuses the shell pane for running `cctmux-ralph start`.
@@ -352,7 +352,7 @@ cctmux-ralph start ralph-project.md
 
 ## Ralph-Full Layout
 
-Claude Code with git monitor and ralph monitor. Provides visibility into Ralph Loop progress and git changes.
+Claude Code with ralph monitor, git monitor, and task monitor in a 2x2 grid. Provides full visibility into Ralph Loop progress, git changes, and task completion.
 
 ```bash
 cctmux -l ralph-full
@@ -360,31 +360,33 @@ cctmux -l ralph-full
 
 ```
 ┌──────────────────┬──────────────────┐
-│     CLAUDE       │                  │
-│      50%         │  cctmux-ralph    │
-│     ~12%h        │                  │
-├──────────────────┤                  │
-│                  │                  │
+│     CLAUDE       │  cctmux-ralph    │
+│      50%         │     ~77%h        │
+│     ~12%h        ├──────────────────┤
+├──────────────────┤ cctmux-tasks -g  │
+│                  │     ~23%h        │
 │   cctmux-git     │                  │
 │     ~88%h        │                  │
 └──────────────────┴──────────────────┘
 ```
 
 **Use Cases:**
-- Ralph Loop monitoring with git visibility
-- Tracking iteration progress and git changes
-- Complex multi-task Ralph projects needing oversight
+- Ralph Loop monitoring with git and task visibility
+- Tracking iteration progress, git changes, and task completion
+- Complex multi-task Ralph projects needing full oversight
 
 **Pane Structure:**
 | Pane | Content | Size |
 |------|---------|------|
 | Top-left | Claude Code (focused) | 50% width, ~12% height |
-| Right | `cctmux-ralph` | 50% width, 100% height |
+| Top-right | `cctmux-ralph` | 50% width, ~77% height |
 | Bottom-left | `cctmux-git` | 50% width, ~88% height |
+| Bottom-right | `cctmux-tasks -g` | 50% width, ~23% height |
 
 **Monitors Launched:**
 - **Ralph Monitor**: Iteration progress, task completion, token usage, cost tracking
 - **Git Monitor**: Real-time git status (staged, unstaged, untracked files)
+- **Task Monitor**: Dependency graph only (`-g` flag)
 
 **Example Usage:**
 ```bash
@@ -587,7 +589,7 @@ What do you need?
 │
 ├─ Running Ralph Loop?
 │  ├─ Basic monitoring ──────→ ralph
-│  └─ With git tracking ─────→ ralph-full
+│  └─ With git + task tracking ─→ ralph-full
 │
 └─ Reviewing usage? ─────────→ dashboard
 ```
@@ -604,7 +606,7 @@ What do you need?
 | Full visibility during long tasks | `full-monitor` |
 | Review daily/weekly usage | `dashboard` |
 | Ralph Loop with live dashboard | `ralph` |
-| Ralph Loop with git tracking | `ralph-full` |
+| Ralph Loop with git + task tracking | `ralph-full` |
 | Watch git changes while coding | `git-mon` |
 
 ### Setting a Default Layout

@@ -68,6 +68,7 @@ def _sync_skill() -> None:
     Runs silently; prints a one-line notice only when an update is applied.
     Called automatically on every cctmux invocation so 'uv tool upgrade'
     keeps skills in sync without requiring a manual 'cctmux install-skill'.
+    Handles subdirectories (e.g., references/) recursively.
     """
     import hashlib
     import shutil
@@ -87,19 +88,23 @@ def _sync_skill() -> None:
         skill_dest = dest_base / skill_src.name
 
         needs_update = False
-        for src_file in skill_src.iterdir():
+        for src_file in skill_src.rglob("*"):
             if not src_file.is_file():
                 continue
-            dest_file = skill_dest / src_file.name
+            rel = src_file.relative_to(skill_src)
+            dest_file = skill_dest / rel
             if not dest_file.exists() or _md5(src_file) != _md5(dest_file):
                 needs_update = True
                 break
 
         if needs_update:
             skill_dest.mkdir(parents=True, exist_ok=True)
-            for src_file in skill_src.iterdir():
+            for src_file in skill_src.rglob("*"):
                 if src_file.is_file():
-                    shutil.copy2(src_file, skill_dest / src_file.name)
+                    rel = src_file.relative_to(skill_src)
+                    dest_file = skill_dest / rel
+                    dest_file.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(src_file, dest_file)
             console.print(f"[dim]✓ {skill_src.name} skill updated ({skill_dest})[/]")
 
 
@@ -122,9 +127,12 @@ def install_skill() -> None:
         skill_dest = dest_base / skill_src.name
         skill_dest.mkdir(parents=True, exist_ok=True)
 
-        for item in skill_src.iterdir():
+        for item in skill_src.rglob("*"):
             if item.is_file():
-                shutil.copy2(item, skill_dest / item.name)
+                rel = item.relative_to(skill_src)
+                dest_file = skill_dest / rel
+                dest_file.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(item, dest_file)
 
         console.print(f"[green]✓[/] {skill_src.name} installed to {skill_dest}")
         installed += 1

@@ -16,7 +16,7 @@ Get started with cctmux in minutes. This guide covers installation, basic usage,
 ## Prerequisites
 
 **Required:**
-- Python 3.14+
+- Python 3.13+
 - tmux
 - Claude Code CLI (`claude`)
 
@@ -113,7 +113,7 @@ cctmux --dry-run
 
 ## Monitoring Tools
 
-cctmux provides six real-time monitoring tools to track Claude Code activity.
+cctmux provides five real-time monitoring tools to track Claude Code activity.
 
 ### Task Monitor
 

@@ -106,7 +106,7 @@ graph TB
 
 | Entry Point | Module | Purpose |
 |-------------|--------|---------|
-| `cctmux` | `__main__.py:app` | Main session launcher with `install-skill` and `init-config` subcommands |
+| `cctmux` | `__main__.py:app` | Main session launcher with `install-skill`, `init-config`, `config`, `layout`, and `team` subcommands |
 | `cctmux-tasks` | `__main__.py:tasks_app` | Task monitor with dependency graphs |
 | `cctmux-session` | `__main__.py:session_app` | Session event monitor with statistics |
 | `cctmux-agents` | `__main__.py:agents_app` | Subagent activity monitor |
@@ -222,7 +222,7 @@ sequenceDiagram
     CLI->>History: save_history()
 ```
 
-Session creation sets environment variables at the tmux session level: `CCTMUX_SESSION`, `CCTMUX_PROJECT_DIR`, and optionally `CLAUDE_CODE_TASK_LIST_ID` (when `--task-list-id` is used). These are also exported into the shell so that Claude Code and layout pane commands can reference them.
+Session creation sets environment variables at the tmux session level: `CCTMUX_SESSION`, `CCTMUX_PROJECT_DIR`, and optionally `CLAUDE_CODE_TASK_LIST_ID` (when `--task-list-id` is used) and `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` (when `--agent-teams` is used). These are also exported into the shell so that Claude Code and layout pane commands can reference them.
 
 ### Monitor Data Flow
 
@@ -303,7 +303,7 @@ Ralph Loop completion is detected via three mechanisms: all checklist items in t
 |---------|----------|
 | Configuration | `~/.config/cctmux/config.yaml` |
 | Session History | `~/.local/share/cctmux/history.yaml` |
-| Skill Files | `~/.claude/skills/cc-tmux/` |
+| Skill Files | `~/.claude/skills/cc-tmux/` and `~/.claude/skills/cc-team-lead/` |
 
 ### Claude Code Data
 
@@ -314,6 +314,7 @@ Ralph Loop completion is detected via three mechanisms: all checklist items in t
 | Subagent Transcripts | `~/.claude/projects/<encoded-path>/agent-*.jsonl` or `<session-id>/subagents/agent-*.jsonl` |
 | Stats Cache | `~/.claude/stats-cache.json` |
 | Ralph State | `$PROJECT/.claude/ralph-state.json` |
+| Team Prompt Files | `$PROJECT/.cctmux/prompts/<role>.md` |
 
 ### Path Encoding
 
@@ -328,7 +329,7 @@ Project paths are encoded for Claude folder lookups by replacing `/` with `-`:
 ```
 src/cctmux/
 ├── __init__.py           # Package version
-├── __main__.py           # CLI entry points (7 Typer apps)
+├── __main__.py           # CLI entry points (7 Typer apps + config, layout, team subcommand groups)
 ├── config.py             # Configuration models and presets
 ├── session_history.py    # Session tracking with Pydantic
 ├── tmux_manager.py       # Core tmux operations
@@ -341,14 +342,15 @@ src/cctmux/
 ├── ralph_runner.py       # Ralph Loop engine
 ├── ralph_monitor.py      # Ralph Loop live dashboard
 ├── xdg_paths.py          # XDG-compliant path management
-└── utils.py              # Shared utilities
+├── utils.py              # Shared utilities
+└── skill/                # Bundled skill files (cc-tmux, cc-team-lead)
 ```
 
 ### Module Responsibilities
 
 | Module | Responsibility |
 |--------|----------------|
-| `config.py` | Pydantic models for config, monitor-specific configs, presets (`default`, `minimal`, `verbose`, `debug`), YAML I/O |
+| `config.py` | Pydantic models for config, monitor-specific configs, custom layouts, team config, presets (`default`, `minimal`, `verbose`, `debug`), YAML I/O |
 | `session_history.py` | Track recent sessions, LRU management, Pydantic models with YAML serialization |
 | `tmux_manager.py` | Session creation, attachment, environment variable setup, status bar configuration |
 | `layouts.py` | Pane splitting with captured pane IDs, command execution per layout |
@@ -378,6 +380,7 @@ graph TD
     GMC[GitMonitorConfig]
     RMC[RalphMonitorConfig]
     CL[CustomLayout]
+    TC[TeamConfig]
 
     Config --> SMC
     Config --> TMC
@@ -386,6 +389,7 @@ graph TD
     Config --> GMC
     Config --> RMC
     Config --> CL
+    Config --> TC
 
     style Config fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
     style SMC fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
@@ -395,6 +399,7 @@ graph TD
     style GMC fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style RMC fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style CL fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style TC fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
 ```
 
 ### Top-Level Config Fields
@@ -406,6 +411,7 @@ graph TD
 | `max_history_entries` | `int` | `50` | Maximum session history entries to keep |
 | `default_claude_args` | `str` or `null` | `null` | Default arguments passed to the `claude` command |
 | `task_list_id` | `bool` | `false` | Set `CLAUDE_CODE_TASK_LIST_ID` to session name |
+| `agent_teams` | `bool` | `false` | Enable experimental agent teams (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`) |
 
 ### Configuration Presets
 
@@ -485,15 +491,16 @@ Team mode launches N Claude Code instances in a single tmux session, each with i
 
 `create_team_session()` in `tmux_manager.py`:
 1. Creates a new tmux session named after the team (or project)
-2. Calls `compute_team_layout()` to determine pane split dimensions based on the chosen strategy (`grid`, `columns`, or `rows`)
-3. Splits the session window into N panes using the computed dimensions
-4. For each pane, sets environment variables and sends the `claude` command with role-specific flags
+2. Writes per-agent system prompt files to `$PROJECT/.cctmux/prompts/` (ensures `.cctmux/` is gitignored)
+3. Calls `compute_team_layout()` to determine pane split dimensions based on the chosen strategy (`grid`, `columns`, or `rows`)
+4. Splits the session window into N panes using the computed dimensions
+5. For each pane, sets environment variables and sends the `claude` command with role-specific flags
 
 ### Layout Computation
 
 `compute_team_layout()` in `layouts.py` accepts the agent count and layout strategy:
 - **grid** — arranges panes in a balanced grid (e.g., 2x2 for 4 agents)
-- **columns** — all panes side-by-side horizontally
+- **columns** — all panes side-by-side in equal-width columns
 - **rows** — all panes stacked vertically
 
 ### Per-Pane Environment
@@ -501,11 +508,12 @@ Team mode launches N Claude Code instances in a single tmux session, each with i
 Each agent pane receives:
 - `CC2CC_SESSION_ID` — unique per pane (prevents session file races between agents)
 - `CLAUDE_CODE_TASK_LIST_ID` — shared across all panes when `shared_task_list` is enabled
+- `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` — set to `1` when `agent_teams` is enabled
 - `CCTMUX_SESSION` and `CCTMUX_PROJECT_DIR` — standard cctmux env vars
 
 ### cc2cc Integration
 
-Each agent is launched with `--append-system-prompt` containing the role prompt from the team config and `--name` set to the role name. All agents auto-subscribe to the project's cc2cc topic on connect, enabling inter-agent communication through the cc2cc hub.
+Each agent is launched with `--append-system-prompt-file` pointing to a generated prompt file containing the role instructions, and `--name` set to the role name. Team agents also receive `--dangerously-skip-permissions` for autonomous operation and `--dangerously-load-development-channels` for cc2cc communication. All agents auto-subscribe to the project's cc2cc topic on connect, enabling inter-agent communication through the cc2cc hub.
 
 ## Related Documentation
 

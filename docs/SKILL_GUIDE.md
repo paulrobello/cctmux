@@ -13,6 +13,10 @@ Guide to using the cc-tmux skill with Claude Code. This skill enables Claude to 
 - [How It Works](#how-it-works)
 - [Best Practices](#best-practices)
 - [Environment Variables](#environment-variables)
+- [Monitors](#monitors)
+- [Ralph Loop](#ralph-loop)
+- [Custom Layouts](#custom-layouts)
+- [Team Mode](#team-mode)
 - [Troubleshooting](#troubleshooting)
 - [Related Documentation](#related-documentation)
 
@@ -68,7 +72,7 @@ Verify installation:
 
 ```bash
 ls ~/.claude/skills/cc-tmux/
-# Should show: SKILL.md
+# Should show: SKILL.md  references/
 ```
 
 ## Invoking the Skill
@@ -272,6 +276,8 @@ These variables are set at the tmux session level via `tmux set-environment` and
 
 When the `--task-list-id` / `-T` flag is used (or `task_list_id: true` in config), an additional variable `$CLAUDE_CODE_TASK_LIST_ID` is set to the session name, enabling Claude Code's task list feature.
 
+When the `--agent-teams` / `-A` flag is used (or `agent_teams: true` in config), `$CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is set to `1`, enabling experimental agent team capabilities.
+
 ### Pane ID Discovery (Critical)
 
 **Pane indices are NOT always predictable.** Both window and pane indices can start at any value (0, 1, etc.). Hardcoding positional indices like `:0.0` or `:0.1` can target the wrong pane -- including sending commands to the main Claude pane.
@@ -384,9 +390,53 @@ cctmux sets the following environment variables at both the tmux session level a
 |----------|-------------|---------|
 | `CCTMUX_SESSION` | The tmux session name | `my-project` |
 | `CCTMUX_PROJECT_DIR` | Absolute path to the project directory | `/Users/you/my-project` |
-| `CLAUDE_CODE_TASK_LIST_ID` | Set to session name when `--task-list-id` is used | `my-project` |
+| `CLAUDE_CODE_TASK_LIST_ID` | Set to session name when `--task-list-id` / `-T` is used | `my-project` |
+| `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | Set to `1` when `--agent-teams` / `-A` is used | `1` |
+| `CC2CC_SESSION_ID` | Unique ID per pane in team mode for cc2cc session isolation | `<uuid>` |
 
 Session names are sanitized from the project folder name: converted to lowercase, special characters removed, underscores and spaces replaced with hyphens.
+
+## Monitors
+
+cctmux includes seven CLI entry points, five of which are dedicated real-time monitors:
+
+| Monitor | Description |
+|---------|-------------|
+| `cctmux-tasks` | Task dependency graphs and progress tracking |
+| `cctmux-session` | Session events: thinking blocks, tool calls, token usage |
+| `cctmux-agents` | Subagent activity tracking |
+| `cctmux-activity` | Usage statistics dashboard with heatmaps and cost data |
+| `cctmux-git` | Real-time git repository status |
+
+All monitors support `--preset` for quick configuration (`minimal`, `verbose`, `debug`). Monitor settings can also be configured in the config file under their respective sections (e.g., `session_monitor`, `task_monitor`). See [Configuration](CONFIGURATION.md) for details.
+
+## Ralph Loop
+
+The Ralph Loop (`cctmux-ralph`) is an automated iterative development engine that reads a project markdown file, runs Claude in a loop, and tracks task completion. Subcommands include `start`, `status`, `cancel`, and `init`.
+
+Dedicated layouts are available: `ralph` (shell + ralph monitor) and `ralph-full` (Claude + git monitor + ralph monitor).
+
+See [CLI Reference](CLI_REFERENCE.md) for full `cctmux-ralph` command documentation.
+
+## Custom Layouts
+
+In addition to the ten predefined layouts, cctmux supports saving and managing custom pane arrangements via the `cctmux layout` subcommand group:
+
+| Subcommand | Description |
+|------------|-------------|
+| `cctmux layout list` | List all saved custom layouts |
+| `cctmux layout show <name>` | Display details of a custom layout |
+| `cctmux layout add <name>` | Create a new custom layout |
+| `cctmux layout edit <name>` | Modify an existing custom layout |
+| `cctmux layout remove <name>` | Delete a custom layout |
+
+Custom layouts are stored in the config file under `custom_layouts` and can be used with `--layout` / `-l` just like built-in layouts.
+
+## Team Mode
+
+The `cctmux team` subcommand launches multiple Claude Code instances as a coordinated team in a single tmux session. Each agent gets a unique `CC2CC_SESSION_ID` for cc2cc session isolation and can be assigned a specific role via `--append-system-prompt`.
+
+Team configuration is loaded from a standalone YAML file or the `team:` key in `.cctmux.yaml`. See [CC2CC Team Guide](CC2CC_TEAM.md) for the full team mode documentation.
 
 ## Troubleshooting
 
@@ -439,7 +489,8 @@ Commands going to the wrong pane, or commands appearing in the Claude input.
 ## Related Documentation
 
 - [Layouts Reference](LAYOUTS.md) - Predefined layout options and diagrams
-- [CLI Reference](CLI_REFERENCE.md) - Complete command documentation for all six entry points
+- [CLI Reference](CLI_REFERENCE.md) - Complete command documentation for all seven entry points
 - [Configuration](CONFIGURATION.md) - Configuration file options and presets
 - [Quick Start](QUICKSTART.md) - Getting started guide
 - [Architecture](ARCHITECTURE.md) - System architecture overview
+- [CC2CC Team Guide](CC2CC_TEAM.md) - Multi-agent team mode documentation

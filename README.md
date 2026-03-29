@@ -207,7 +207,7 @@ cctmux install-skill  # Install the cc-tmux skill for Claude
 | `full-monitor` | Claude + session + tasks + activity monitors |
 | `dashboard` | Large activity dashboard with session sidebar |
 | `ralph` | Shell + ralph monitor side-by-side (60/40) |
-| `ralph-full` | Shell + ralph monitor + task monitor |
+| `ralph-full` | Claude + git monitor + ralph monitor + task monitor (2x2 grid) |
 | `git-mon` | Claude (60%) + git status monitor (40%) |
 
 ### CC-Mon Layout
@@ -487,7 +487,7 @@ team:
 
 **Permissions:** All team agents are launched with `--dangerously-skip-permissions` so they can operate autonomously without interactive prompts.
 
-**Layout options:** `grid` (default) arranges panes in an N-column grid, `columns` stacks panes side-by-side, `rows` stacks panes top-to-bottom.
+**Layout options:** `grid` (default) arranges panes in an N-column grid, `columns` arranges panes in equal-width columns, `rows` stacks panes top-to-bottom.
 
 ## Claude Skills
 
@@ -601,6 +601,7 @@ Full documentation is available in the `docs/` directory:
 - [Layouts Reference](docs/LAYOUTS.md) - All ten predefined layouts with diagrams
 - [Skill Guide](docs/SKILL_GUIDE.md) - Using the cc-tmux skill with Claude
 - [Configuration](docs/CONFIGURATION.md) - Configuration options and presets
+- [Team Mode](docs/CC2CC_TEAM.md) - Multi-agent team coordination via cc2cc
 
 ## License
 

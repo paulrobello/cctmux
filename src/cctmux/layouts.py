@@ -1048,6 +1048,11 @@ def compute_team_layout(
 def _compute_columns_splits(n_agents: int) -> list[PaneSplit]:
     """Compute splits for the columns strategy (all agents side-by-side).
 
+    Always splits from the main pane so each new column takes a proportional
+    share of the remaining space, producing equal-width columns.
+
+    For 2 agents: 50/50.  For 3 agents: ~33/33/33.
+
     Args:
         n_agents: Total number of agent panes.
 
@@ -1056,10 +1061,10 @@ def _compute_columns_splits(n_agents: int) -> list[PaneSplit]:
     """
     splits: list[PaneSplit] = []
     for i in range(1, n_agents):
-        # Each split divides the remaining space equally.
-        # After placing agent 0, agent 1 splits main; agent 2 splits last, etc.
-        # The size percentage for agent i is: 100 // (n_agents - i + 1)
-        # This ensures roughly equal widths when applied sequentially.
+        # Each split divides the main pane's remaining space.
+        # After i-1 splits, main holds (n_agents - (i-1)) shares.
+        # The new pane should get 1 share, so its percentage of the
+        # remaining main space is: 100 // (n_agents - i + 1).
         remaining = n_agents - i + 1
         size = max(1, min(90, 100 // remaining))
         splits.append(
@@ -1067,7 +1072,7 @@ def _compute_columns_splits(n_agents: int) -> list[PaneSplit]:
                 direction=SplitDirection.HORIZONTAL,
                 size=size,
                 name=f"agent-{i}",
-                target="last" if i > 1 else "main",
+                target="main",
             )
         )
     return splits

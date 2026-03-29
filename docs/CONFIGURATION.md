@@ -165,6 +165,7 @@ git_monitor:
   show_diff: true
   show_status: true
   max_commits: 10
+  max_files: 20
   poll_interval: 2.0
   fetch_enabled: false    # Periodically fetch from remote to check for new commits
   fetch_interval: 60.0    # How often to fetch (seconds)
@@ -425,6 +426,7 @@ cctmux -l my-layout
 | `show_diff` | boolean | `true` | Show diff stats panel |
 | `show_status` | boolean | `true` | Show file status panel |
 | `max_commits` | integer | `10` | Maximum recent commits to display |
+| `max_files` | integer | `20` | Maximum files to display in status and diff panels (0 for unlimited) |
 | `poll_interval` | float | `2.0` | Polling interval in seconds |
 | `fetch_enabled` | boolean | `false` | Periodically fetch from remote |
 | `fetch_interval` | float | `60.0` | How often to fetch from remote (seconds) |
@@ -493,7 +495,7 @@ Reduces visual noise for focused work:
 
 **Git Monitor:**
 - Hide log and diff panels
-- Max 5 commits
+- Max 5 commits, 15 files
 - Fetch disabled
 
 **Ralph Monitor:**
@@ -523,7 +525,7 @@ Shows comprehensive information:
 
 **Git Monitor:**
 - All panels visible
-- Max 20 commits
+- Max 20 commits, 30 files
 - Fetch enabled (60s interval)
 
 **Ralph Monitor:**
@@ -551,7 +553,7 @@ Maximum detail for troubleshooting:
 
 **Git Monitor:**
 - All panels visible
-- Max 30 commits
+- Max 30 commits, 50 files
 - Fetch enabled (30s interval)
 
 **Ralph Monitor:**
@@ -656,7 +658,7 @@ The `team:` section configures multi-agent team mode. It can be defined in `.cct
 | `name` | string | project name | Team name (used for session naming) |
 | `shared_task_list` | boolean | `true` | Share `CLAUDE_CODE_TASK_LIST_ID` across all agents |
 | `layout` | string | `grid` | Pane layout strategy: `grid`, `columns`, or `rows` |
-| `monitor` | boolean | `false` | Add a cctmux-tasks monitor pane |
+| `monitor` | boolean | `true` | Add a cctmux-tasks monitor pane |
 | `agents` | list | (required) | List of agent definitions |
 
 ### TeamAgent Fields
@@ -664,7 +666,7 @@ The `team:` section configures multi-agent team mode. It can be defined in `.cct
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `role` | string | (required) | Agent role name (e.g., `architect`, `implementer`) |
-| `prompt` | string | `""` | Role-specific system prompt injected via `--append-system-prompt` |
+| `prompt` | string | `""` | Role-specific system prompt injected via `--append-system-prompt-file` |
 | `model` | string | `null` | Claude model to use via `--model` (e.g., `sonnet`, `opus`) |
 | `claude_args` | string | `null` | Per-agent Claude CLI arg overrides |
 
@@ -715,7 +717,7 @@ team:
 | Layout | Description |
 |--------|-------------|
 | `grid` | Arranges agent panes in a balanced N-column grid (default) |
-| `columns` | All panes side-by-side horizontally |
+| `columns` | All panes side-by-side in equal-width columns |
 | `rows` | All panes stacked vertically |
 
 ## Related Documentation

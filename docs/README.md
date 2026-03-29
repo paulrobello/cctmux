@@ -14,14 +14,17 @@ cctmux provides a seamless integration between Claude Code and tmux, enabling:
 
 - **Session Management**: Create and attach to named tmux sessions per project
 - **Layout Presets**: Predefined pane arrangements for different workflows (default, editor, monitor, triple, cc-mon, full-monitor, dashboard, ralph, ralph-full, git-mon)
+- **Custom Layouts**: Define your own pane arrangements with split direction, size, target pane, and commands
 - **Real-time Monitoring**: Track tasks, session events, subagents, and usage statistics
-- **Configuration**: YAML-based settings with CLI overrides and presets
+- **Configuration**: YAML-based settings with layered merging (user, project, local), CLI overrides, and presets
+- **Team Mode**: Launch multiple Claude Code instances as a coordinated team with role-specific prompts and cc2cc communication
 - **Ralph Loop Automation**: Automated iterative Claude Code execution with task tracking, cost monitoring, and completion detection
 
 ```mermaid
 graph TB
     subgraph "cctmux CLI Tools"
         Main[cctmux]
+        Team[cctmux team]
         Tasks[cctmux-tasks]
         Session[cctmux-session]
         Agents[cctmux-agents]
@@ -46,9 +49,12 @@ graph TB
 
     subgraph "External"
         GitRepo[Git Repository]
+        CC2CC[cc2cc Hub]
     end
 
     Main --> TmuxSession
+    Team --> TmuxSession
+    Team --> CC2CC
     TmuxSession --> Panes
     TmuxSession --> StatusBar
     Panes --> Claude
@@ -62,6 +68,7 @@ graph TB
     Ralph --> Claude
 
     style Main fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
+    style Team fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
     style Tasks fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style Session fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style Agents fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
@@ -77,6 +84,7 @@ graph TB
     style StatsCache fill:#1a237e,stroke:#3f51b5,stroke-width:2px,color:#ffffff
     style RalphState fill:#1a237e,stroke:#3f51b5,stroke-width:2px,color:#ffffff
     style GitRepo fill:#004d40,stroke:#00897b,stroke-width:2px,color:#ffffff
+    style CC2CC fill:#004d40,stroke:#00897b,stroke-width:2px,color:#ffffff
 ```
 
 ## Documentation Index
@@ -86,9 +94,10 @@ graph TB
 | [QUICKSTART.md](QUICKSTART.md) | Get started with cctmux in minutes |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System design and data flow |
 | [CLI_REFERENCE.md](CLI_REFERENCE.md) | Complete reference for all CLI commands |
-| [LAYOUTS.md](LAYOUTS.md) | Predefined layouts reference |
+| [LAYOUTS.md](LAYOUTS.md) | Predefined and custom layouts reference |
 | [SKILL_GUIDE.md](SKILL_GUIDE.md) | Using the cc-tmux skill with Claude |
-| [CONFIGURATION.md](CONFIGURATION.md) | Configuration file and presets |
+| [CONFIGURATION.md](CONFIGURATION.md) | Configuration file, presets, and layered merging |
+| [CC2CC_TEAM.md](CC2CC_TEAM.md) | Team mode and multi-agent coordination |
 | [DOCUMENTATION_STYLE_GUIDE.md](DOCUMENTATION_STYLE_GUIDE.md) | Documentation standards and formatting |
 
 ## Quick Links
@@ -100,6 +109,14 @@ graph TB
 | `cctmux` | Launch Claude Code in a tmux session |
 | `cctmux install-skill` | Install the cc-tmux skill to `~/.claude/skills/` |
 | `cctmux init-config` | Create default configuration file |
+| `cctmux config validate` | Validate all config files and report warnings |
+| `cctmux config show` | Show effective merged configuration |
+| `cctmux layout list` | List all available layouts (built-in and custom) |
+| `cctmux layout show` | Show layout details |
+| `cctmux layout add` | Create a new custom layout |
+| `cctmux layout edit` | Edit an existing custom layout |
+| `cctmux layout remove` | Remove a custom layout |
+| `cctmux team [file]` | Launch a team of Claude Code instances |
 | `cctmux-tasks` | Monitor Claude Code tasks in real-time |
 | `cctmux-session` | Monitor Claude Code session stream in real-time |
 | `cctmux-agents` | Monitor subagent activity in real-time |
@@ -126,6 +143,30 @@ cctmux install-skill
 
 # Create default config file
 cctmux init-config
+
+# Validate config files
+cctmux config validate
+
+# Show effective merged config
+cctmux config show
+
+# List all layouts (built-in and custom)
+cctmux layout list
+
+# Show details for a specific layout
+cctmux layout show cc-mon
+
+# Create a custom layout (opens in $EDITOR)
+cctmux layout add my-layout
+
+# Create a custom layout based on an existing one
+cctmux layout add my-layout --from cc-mon
+
+# Launch a team of Claude Code instances
+cctmux team team.yaml
+
+# Launch team from .cctmux.yaml team: section
+cctmux team
 
 # Monitor tasks in another terminal
 cctmux-tasks

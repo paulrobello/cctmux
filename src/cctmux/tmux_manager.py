@@ -153,11 +153,15 @@ def _build_claude_cmd(
     parts = ["claude"]
 
     # Role-specific system prompt
+    skills_to_load = "/cc2cc"
+    if "lead" in agent.role.lower():
+        skills_to_load = "/cc-team-lead, /cc-tmux, and /cc2cc"
     team_prompt = (
         f"You are the {agent.role} on a team of {n_agents} Claude Code instances "
         f"collaborating via cc2cc on the '{project}' topic.\n\n"
         f"{agent.prompt.strip()}\n\n"
-        f"Call set_role('{agent.role}') immediately when your session starts."
+        f"Load the {skills_to_load} skill(s) immediately when your session starts, "
+        f"then call set_role('{agent.role}')."
     )
     # Write prompt to a file to avoid shell quoting issues with tmux send-keys
     prompt_file = prompt_dir / f"{agent.role}.md"

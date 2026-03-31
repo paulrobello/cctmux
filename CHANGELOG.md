@@ -4,6 +4,12 @@ All notable changes to cctmux will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.3] - 2026-03-31
+
+### Improved
+
+- **Subagent monitor shows agent names** — agents now display their assigned name (e.g., `fix-security`, `fix-architecture`) instead of hash prefixes (e.g., `aab6a9d`) in both the agent table and activity log, by parsing the parent session's Agent tool calls and matching on prompt content
+
 ## [0.3.2] - 2026-03-29
 
 ### Added

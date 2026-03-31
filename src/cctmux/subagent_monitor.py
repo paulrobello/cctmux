@@ -100,14 +100,24 @@ class Subagent:
     activities: list[SubagentActivity] = field(default_factory=_empty_activity_list)
     last_activity: SubagentActivity | None = None
     initial_prompt: str = ""
+    agent_name: str = ""
     raw_data: dict[str, Any] = field(default_factory=_empty_dict)
 
     @property
     def display_name(self) -> str:
         """Get display name for the agent."""
+        if self.agent_name:
+            return self.agent_name
         if self.slug:
             return self.slug
         return f"agent-{self.agent_id}"
+
+    @property
+    def short_label(self) -> str:
+        """Get a short label for activity log entries."""
+        if self.agent_name:
+            return self.agent_name
+        return self.agent_id[:7]
 
     @property
     def duration_seconds(self) -> float:
@@ -197,6 +207,88 @@ def _parse_timestamp(ts_str: str) -> datetime:
         return datetime.fromisoformat(ts_str)
     except (ValueError, AttributeError):
         return datetime.min
+
+
+def build_agent_name_map(
+    session_id: str,
+    project_path: Path | None = None,
+) -> dict[str, str]:
+    """Parse the parent session JSONL to map agent initial prompts to names.
+
+    Reads Agent tool_use calls from the parent session to extract the
+    description/subagent_type. Builds a map keyed by the first 200 chars
+    of the prompt so we can match against agent JSONL initial_prompt.
+
+    Args:
+        session_id: The parent session ID.
+        project_path: Project directory to locate the session JSONL.
+
+    Returns:
+        Dict mapping prompt_prefix (first 200 chars) to agent name
+        (prefers subagent_type, falls back to description).
+    """
+    name_map: dict[str, str] = {}
+    claude_projects = Path.home() / ".claude" / "projects"
+    if not claude_projects.exists():
+        return name_map
+
+    # Find the parent session JSONL
+    session_file: Path | None = None
+    if project_path:
+        encoded = encode_project_path(project_path)
+        candidate = claude_projects / encoded / f"{session_id}.jsonl"
+        if candidate.exists():
+            session_file = candidate
+    else:
+        # Search all project folders
+        for pf in claude_projects.iterdir():
+            if not pf.is_dir():
+                continue
+            candidate = pf / f"{session_id}.jsonl"
+            if candidate.exists():
+                session_file = candidate
+                break
+
+    if not session_file:
+        return name_map
+
+    try:
+        with session_file.open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                if data.get("type") != "assistant":
+                    continue
+
+                content_list: list[Any] = data.get("message", {}).get("content", [])
+                for raw_item in content_list:
+                    if not isinstance(raw_item, dict):
+                        continue
+                    item_dict = cast(dict[str, Any], raw_item)
+                    if item_dict.get("type") != "tool_use" or item_dict.get("name") != "Agent":
+                        continue
+
+                    inp: dict[str, Any] = dict(item_dict.get("input", {}))
+                    prompt: str = str(inp.get("prompt", ""))
+                    if not prompt:
+                        continue
+
+                    # Prefer subagent_type (e.g. "fix-security"), fall back to description
+                    name: str = str(inp.get("subagent_type", "") or inp.get("description", ""))
+                    if name:
+                        # Key on first 200 chars of prompt to match initial_prompt
+                        key: str = prompt[:200]
+                        name_map[key] = name
+    except OSError:
+        pass
+
+    return name_map
 
 
 def _extract_tool_summary(input_data: dict[str, Any]) -> str:
@@ -534,6 +626,20 @@ def load_subagents(
         if agent:
             agents.append(agent)
 
+    # Build name map from parent session and apply to agents
+    # Group agents by session_id and resolve names per session
+    sessions_seen: set[str] = set()
+    for agent in agents:
+        if agent.session_id and agent.session_id not in sessions_seen:
+            sessions_seen.add(agent.session_id)
+            name_map = build_agent_name_map(agent.session_id, project_path)
+            if name_map:
+                for a in agents:
+                    if a.session_id == agent.session_id and not a.agent_name:
+                        key = a.initial_prompt[:200]
+                        if key in name_map:
+                            a.agent_name = name_map[key]
+
     # Filter inactive agents
     if inactive_timeout > 0:
         agents = filter_inactive_agents(agents, inactive_timeout)
@@ -723,10 +829,10 @@ def build_agent_table(
         # Status symbol
         status_text = Text(agent.status_symbol, style=agent.status_color)
 
-        # Agent name — when slug is shared, show agent_id + task description
+        # Agent name — when name is shared, disambiguate with short_id + task description
         base_name = agent.display_name
         if slug_counts[base_name] > 1:
-            short_id = agent.agent_id[:7]
+            short_id = agent.short_label
             # Prefer AI summary, fall back to truncated initial prompt
             description = (summaries or {}).get(agent.agent_id, "")
             if not description and agent.initial_prompt:
@@ -846,7 +952,7 @@ def build_activity_panel(agents: list[Subagent], max_activities: int = 15) -> Pa
     for agent, activity in all_activities[:max_activities]:
         ts_str = activity.timestamp.strftime("%H:%M:%S")
         text.append(f"{ts_str} ", style="dim")
-        text.append(f"[{agent.agent_id[:7]}] ", style="cyan")
+        text.append(f"[{agent.short_label}] ", style="cyan")
         text.append(f"{activity.symbol} ", style=activity.color)
 
         content = compress_paths_in_text(activity.content.replace("\n", " "))

@@ -283,6 +283,7 @@ cctmux-agents -M 10             # Show at most 10 agents
 ```
 
 **Features:**
+- Named agent display — shows assigned names (e.g., `fix-security`) instead of hash IDs
 - Active and completed subagent tracking
 - Token usage per agent
 - Current activity display

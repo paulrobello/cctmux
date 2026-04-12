@@ -363,12 +363,12 @@ def create_team_session(
     # load prompt has time to appear and can be accepted automatically.
     main_pane = pane_registry.get("main", "")
     if not dry_run and main_pane:
-        time.sleep(3)
+        time.sleep(5)
         enter_cmd = ["tmux", "send-keys", "-t", main_pane, "Enter"]
-        commands.append(f"sleep 3 && {' '.join(enter_cmd)}")
+        commands.append(f"sleep 5 && {' '.join(enter_cmd)}")
         subprocess.run(enter_cmd, check=True)
     else:
-        commands.append(f"sleep 3 && tmux send-keys -t {session_name}:0.0 Enter")
+        commands.append(f"sleep 5 && tmux send-keys -t {session_name}:0.0 Enter")
 
     # Focus the first (agent-0) pane
     if not dry_run and main_pane:

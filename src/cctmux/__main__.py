@@ -40,7 +40,14 @@ from cctmux.subagent_monitor import (
     run_subagent_monitor,
 )
 from cctmux.task_monitor import list_sessions, run_monitor
-from cctmux.tmux_manager import attach_session, create_session, create_team_session, is_inside_tmux, session_exists
+from cctmux.tmux_manager import (
+    attach_session,
+    create_pi_session,
+    create_session,
+    create_team_session,
+    is_inside_tmux,
+    session_exists,
+)
 from cctmux.utils import get_project_name, is_fzf_available, sanitize_session_name, select_with_fzf
 from cctmux.xdg_paths import ensure_directories, get_config_file_path
 
@@ -108,7 +115,7 @@ def _sync_skill() -> None:
             console.print(f"[dim]✓ {skill_src.name} skill updated ({skill_dest})[/]")
 
 
-def _sync_pi_skill() -> None:  # pyright: ignore[reportUnusedFunction]
+def _sync_pi_skill() -> None:
     """Auto-install bundled pi skills to ~/.pi/agent/skills/ if missing or outdated.
 
     Compares the content hash of each bundled file against the installed copy.
@@ -1687,6 +1694,220 @@ def team_launch(
         for cmd in commands:
             console.print(f"  {cmd}")
         console.print("[dim]Note: Actual execution uses pane IDs (%%N) for reliable targeting.[/]")
+
+
+pi_app = typer.Typer(
+    name="pitmux",
+    help="Launch the pi coding agent inside tmux with session management.",
+    no_args_is_help=False,
+)
+
+
+@pi_app.callback(invoke_without_command=True)
+def pi_main(
+    ctx: typer.Context,
+    layout: Annotated[
+        str,
+        typer.Option("--layout", "-l", help="Tmux layout to use (built-in or custom name)."),
+    ] = "default",
+    recent: Annotated[
+        bool,
+        typer.Option("--recent", "-R", help="Select from recent sessions using fzf."),
+    ] = False,
+    resume: Annotated[
+        bool,
+        typer.Option("--resume", "-r", help="Append --resume to pi invocation to select a session to resume."),
+    ] = False,
+    status_bar: Annotated[
+        bool,
+        typer.Option("--status-bar", "-s", help="Enable status bar with git/project info."),
+    ] = False,
+    debug: Annotated[
+        bool,
+        typer.Option("--debug", "-D", help="Enable debug output."),
+    ] = False,
+    verbose: Annotated[
+        int,
+        typer.Option("--verbose", "-v", count=True, help="Increase verbosity."),
+    ] = 0,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", "-n", help="Preview commands without executing."),
+    ] = False,
+    config_path: Annotated[
+        Path | None,
+        typer.Option("--config", "-C", help="Config file path."),
+    ] = None,
+    continue_session: Annotated[
+        bool,
+        typer.Option("--continue", "-c", help="Append --continue to pi invocation to continue the previous session."),
+    ] = False,
+    dump_config: Annotated[
+        bool,
+        typer.Option("--dump-config", help="Output current configuration."),
+    ] = False,
+    pi_args: Annotated[
+        str | None,
+        typer.Option(
+            "--pi-args",
+            "-a",
+            help="Arguments to pass to the pi command (e.g., '--model anthropic/claude-sonnet-4-6').",
+        ),
+    ] = None,
+    strict: Annotated[
+        bool,
+        typer.Option("--strict", help="Exit with error on config validation warnings."),
+    ] = False,
+    version: Annotated[
+        bool | None,
+        typer.Option("--version", callback=version_callback, is_eager=True, help="Show version."),
+    ] = None,
+) -> None:
+    """Launch the pi coding agent in a tmux session for the current directory."""
+    # Auto-sync the bundled pi-tmux skill on every invocation.
+    _sync_pi_skill()
+
+    if ctx.invoked_subcommand is not None:
+        return
+
+    ensure_directories()
+
+    config, config_warnings = load_config(config_path, project_dir=Path.cwd(), strict=strict)
+
+    if config_warnings:
+        display_config_warnings(config_warnings, err_console)
+        if strict:
+            raise typer.Exit(1)
+
+    if dump_config:
+        import yaml
+
+        data = config.model_dump()
+        data["default_layout"] = config.default_layout.value
+        console.print(yaml.dump(data, default_flow_style=False))
+        raise typer.Exit()
+
+    # Merge CLI args with config (CLI takes precedence)
+    if layout != "default":
+        effective_layout: LayoutType | str = layout
+    else:
+        effective_layout = config.default_layout
+    effective_status_bar = status_bar or config.status_bar_enabled
+    effective_pi_args = pi_args if pi_args else config.default_pi_args
+    if resume:
+        resume_flag = "--resume"
+        if effective_pi_args:
+            if resume_flag not in effective_pi_args:
+                effective_pi_args = f"{effective_pi_args} {resume_flag}"
+        else:
+            effective_pi_args = resume_flag
+    if continue_session:
+        continue_flag = "--continue"
+        if effective_pi_args:
+            if continue_flag not in effective_pi_args:
+                effective_pi_args = f"{effective_pi_args} {continue_flag}"
+        else:
+            effective_pi_args = continue_flag
+
+    if debug or verbose > 1:
+        console.print(f"[dim]Config file: {get_config_file_path()}[/]")
+        layout_display = effective_layout.value if isinstance(effective_layout, LayoutType) else effective_layout
+        console.print(f"[dim]Layout: {layout_display}[/]")
+        console.print(f"[dim]Status bar: {effective_status_bar}[/]")
+        if effective_pi_args:
+            console.print(f"[dim]pi args: {effective_pi_args}[/]")
+
+    if is_inside_tmux():
+        err_console.print("[red]Error:[/] Already inside a tmux session.")
+        err_console.print("[dim]Use standard tmux commands to manage panes.[/]")
+        raise typer.Exit(1)
+
+    history = load_history()
+
+    session_name: str
+    project_dir: Path
+
+    if recent:
+        if not is_fzf_available():
+            err_console.print("[red]Error:[/] fzf is required for --recent but not installed.")
+            raise typer.Exit(1)
+
+        recent_names = get_recent_session_names(history)
+        if not recent_names:
+            err_console.print("[yellow]No recent sessions found.[/]")
+            raise typer.Exit(1)
+
+        selected = select_with_fzf(recent_names, prompt="Session: ")
+        if not selected:
+            raise typer.Exit(0)
+
+        session_name = selected
+        entry = get_entry_by_name(history, session_name)
+        if entry:
+            project_dir = Path(entry.project_dir)
+            if not project_dir.exists():
+                err_console.print(f"[yellow]Warning:[/] Project directory no longer exists: {entry.project_dir}")
+                err_console.print("[dim]Falling back to current directory.[/]")
+                project_dir = Path.cwd()
+        else:
+            project_dir = Path.cwd()
+    else:
+        project_dir = Path.cwd()
+        base_name = get_project_name(project_dir)
+        session_name = sanitize_session_name(f"{config.pi_session_prefix}{base_name}")
+
+    if debug or verbose > 0:
+        console.print(f"[dim]Session: {session_name}[/]")
+        console.print(f"[dim]Project: {project_dir}[/]")
+
+    if session_exists(session_name):
+        if verbose > 0 or dry_run:
+            console.print(f"[blue]Attaching to existing session:[/] {session_name}")
+
+        commands = attach_session(session_name, dry_run=dry_run)
+
+        if dry_run:
+            console.print("[yellow]Commands that would be executed:[/]")
+            for cmd in commands:
+                console.print(f"  {cmd}")
+    else:
+        if verbose > 0 or dry_run:
+            console.print(f"[green]Creating new session:[/] {session_name}")
+
+        # Validate layout name against built-in and custom layouts
+        try:
+            LayoutType(effective_layout)
+        except ValueError:
+            custom_match = [cl for cl in config.custom_layouts if cl.name == effective_layout]
+            if not custom_match:
+                err_console.print(f"[red]Error:[/] Unknown layout: {effective_layout}")
+                err_console.print("[dim]Use 'cctmux layout list' to see available layouts.[/]")
+                raise typer.Exit(1) from None
+
+        commands = create_pi_session(
+            session_name=session_name,
+            project_dir=project_dir,
+            layout=effective_layout,
+            status_bar=effective_status_bar,
+            pi_args=effective_pi_args,
+            custom_layouts=config.custom_layouts,
+            dry_run=dry_run,
+        )
+
+        if dry_run:
+            console.print("[yellow]Commands that would be executed:[/]")
+            for cmd in commands:
+                console.print(f"  {cmd}")
+            console.print("[dim]Note: Actual execution uses pane IDs (%%N) for reliable targeting.[/]")
+
+    if not dry_run:
+        history = add_or_update_entry(
+            history,
+            session_name=session_name,
+            project_dir=str(project_dir.resolve()),
+            max_entries=config.max_history_entries,
+        )
+        save_history(history)
 
 
 if __name__ == "__main__":

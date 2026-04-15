@@ -3,7 +3,11 @@
 from pathlib import Path
 from unittest.mock import patch
 
-from cctmux.__main__ import _sync_pi_skill
+import pytest
+from typer.testing import CliRunner
+
+from cctmux.__main__ import _sync_pi_skill, pi_app
+from cctmux.utils import sanitize_session_name
 
 
 class TestSyncPiSkill:
@@ -44,3 +48,84 @@ class TestSyncPiSkill:
         content = dest.read_text(encoding="utf-8")
         assert "name: pi-tmux" in content
         assert "stale content" not in content
+
+
+class TestPitmuxCLI:
+    """End-to-end tests for the pitmux CLI callback."""
+
+    def test_dry_run_uses_default_prefix(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Session name should start with default 'pi-' prefix."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.delenv("TMUX", raising=False)
+
+        runner = CliRunner()
+        result = runner.invoke(pi_app, ["--dry-run", "-v"])
+        assert result.exit_code == 0, result.output
+        # Session names are sanitized (underscores -> hyphens)
+        expected_prefix = sanitize_session_name(f"pi-{tmp_path.name}")
+        assert expected_prefix in result.output
+
+    def test_dry_run_includes_pi_launch(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Dry-run output should show a pi launch command, not claude."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.delenv("TMUX", raising=False)
+
+        runner = CliRunner()
+        result = runner.invoke(pi_app, ["--dry-run"])
+        assert result.exit_code == 0, result.output
+        assert "send-keys" in result.output
+        assert " pi " in result.output or " pi\n" in result.output or " pi Enter" in result.output
+        assert "claude" not in result.output
+
+    def test_dry_run_continue_flag(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """-c/--continue should append --continue to pi command."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.delenv("TMUX", raising=False)
+
+        runner = CliRunner()
+        result = runner.invoke(pi_app, ["--dry-run", "-c"])
+        assert result.exit_code == 0, result.output
+        assert "pi --continue" in result.output
+
+    def test_dry_run_resume_flag(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """-r/--resume should append --resume to pi command."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.delenv("TMUX", raising=False)
+
+        runner = CliRunner()
+        result = runner.invoke(pi_app, ["--dry-run", "-r"])
+        assert result.exit_code == 0, result.output
+        assert "pi --resume" in result.output
+
+    def test_dry_run_pi_args(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """--pi-args should be passed through to the pi command."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.delenv("TMUX", raising=False)
+
+        runner = CliRunner()
+        result = runner.invoke(pi_app, ["--dry-run", "--pi-args", "--model x"])
+        assert result.exit_code == 0, result.output
+        assert "pi --model x" in result.output
+
+    def test_refuses_when_inside_tmux(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Should exit non-zero if $TMUX is set."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("TMUX", "/tmp/tmux-fake,1234,0")
+
+        runner = CliRunner()
+        result = runner.invoke(pi_app, ["--dry-run"])
+        assert result.exit_code != 0
+        assert "Already inside a tmux session" in result.output
+
+    def test_version(self) -> None:
+        """--version should print the version and exit 0."""
+        runner = CliRunner()
+        result = runner.invoke(pi_app, ["--version"])
+        assert result.exit_code == 0
+        assert "cctmux" in result.output

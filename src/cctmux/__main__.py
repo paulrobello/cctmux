@@ -1703,6 +1703,28 @@ pi_app = typer.Typer(
 )
 
 
+@pi_app.command("install-skill")
+def pi_install_skill() -> None:
+    """Install bundled pi-tmux skill to ~/.pi/agent/skills/."""
+    _sync_pi_skill()
+    console.print("[green]✓[/] pi-tmux skill installed.")
+
+
+@pi_app.command("init-config")
+def pi_init_config() -> None:
+    """Create default configuration file."""
+    ensure_directories()
+    config_file = get_config_file_path()
+
+    if config_file.exists():
+        err_console.print(f"[yellow]Config file already exists:[/] {config_file}")
+        raise typer.Exit(1)
+
+    config = Config()
+    save_config(config)
+    console.print(f"[green]✓[/] Created config file: {config_file}")
+
+
 @pi_app.callback(invoke_without_command=True)
 def pi_main(
     ctx: typer.Context,

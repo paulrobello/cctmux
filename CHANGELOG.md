@@ -4,6 +4,18 @@ All notable changes to cctmux will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.0] - 2026-04-15
+
+### Added
+
+- **`pitmux` command** — new CLI entry point that launches the `pi` coding agent inside tmux sessions, mirroring core `cctmux` functionality
+- **`--continue` / `-c` and `--resume` / `-r` flags** for pitmux to resume or continue pi sessions
+- **`--pi-args` flag** to pass custom arguments to the pi command (reads `default_pi_args` from config)
+- **Configurable session prefix** via `pi_session_prefix` config field (default `pi-`) so cctmux and pitmux sessions coexist
+- **`default_pi_args` and `pi_session_prefix` config fields** added to the Config model
+- **`create_pi_session()`** in `tmux_manager.py` — creates tmux sessions that launch `pi` instead of `claude`
+- **Bundled `pi-tmux` skill** — auto-installed to `~/.pi/agent/skills/` on each pitmux run with MD5-based drift detection
+
 ## [0.3.3] - 2026-03-31
 
 ### Improved

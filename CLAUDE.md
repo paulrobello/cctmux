@@ -45,7 +45,7 @@ src/cctmux/
 └── utils.py            # Session name sanitization, fzf integration, path compression
 ```
 
-**Seven Entry Points**:
+**Eight Entry Points**:
 - `cctmux` - Main CLI for tmux session management
 - `cctmux-tasks` - Task monitor for Claude Code TodoWrite tasks
 - `cctmux-session` - Session event monitor (shows thinking, tool calls, text output)
@@ -53,6 +53,7 @@ src/cctmux/
 - `cctmux-activity` - Usage statistics dashboard
 - `cctmux-git` - Real-time git repository status monitor
 - `cctmux-ralph` - Ralph Loop automation (start/monitor/cancel/status/init)
+- `pitmux` - Launch the pi coding agent inside tmux
 
 **Data Flow**: CLI (`__main__.py`) → loads config → checks/creates tmux session via `tmux_manager.py` → applies layout → updates history
 

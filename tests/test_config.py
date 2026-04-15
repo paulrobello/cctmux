@@ -49,6 +49,26 @@ class TestConfig:
         config = Config()
         assert config.ignore_parent_configs is False
 
+    def test_default_pi_args_default(self) -> None:
+        """default_pi_args should default to None."""
+        config = Config()
+        assert config.default_pi_args is None
+
+    def test_default_pi_args_custom(self) -> None:
+        """default_pi_args should accept a string."""
+        config = Config(default_pi_args="--model anthropic/claude-sonnet-4-6")
+        assert config.default_pi_args == "--model anthropic/claude-sonnet-4-6"
+
+    def test_pi_session_prefix_default(self) -> None:
+        """pi_session_prefix should default to 'pi-'."""
+        config = Config()
+        assert config.pi_session_prefix == "pi-"
+
+    def test_pi_session_prefix_custom(self) -> None:
+        """pi_session_prefix should accept custom strings, including empty."""
+        assert Config(pi_session_prefix="my-").pi_session_prefix == "my-"
+        assert Config(pi_session_prefix="").pi_session_prefix == ""
+
 
 class TestLayoutType:
     """Tests for LayoutType enum."""

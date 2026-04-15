@@ -16,7 +16,7 @@ System design and data flow for cctmux. This document describes how the componen
 
 ## Overview
 
-cctmux is a CLI toolset that integrates Claude Code with tmux for enhanced session management and monitoring. The system consists of seven CLI entry points that share common modules for configuration, session tracking, and display rendering.
+cctmux is a CLI toolset that integrates Claude Code with tmux for enhanced session management and monitoring. The system consists of eight CLI entry points (seven for Claude Code, one for the pi coding agent) that share common modules for configuration, session tracking, and display rendering.
 
 ```mermaid
 graph TB
@@ -113,6 +113,7 @@ graph TB
 | `cctmux-activity` | `__main__.py:activity_app` | Usage statistics dashboard |
 | `cctmux-git` | `__main__.py:git_app` | Real-time git repository status monitor |
 | `cctmux-ralph` | `__main__.py:ralph_app` | Ralph Loop automation with `start`, `init`, `stop`, `cancel`, and `status` subcommands |
+| `pitmux` | `__main__.py:pi_app` | Launch the pi coding agent in a tmux session |
 
 ### Core Modules
 
@@ -304,6 +305,7 @@ Ralph Loop completion is detected via three mechanisms: all checklist items in t
 | Configuration | `~/.config/cctmux/config.yaml` |
 | Session History | `~/.local/share/cctmux/history.yaml` |
 | Skill Files | `~/.claude/skills/cc-tmux/` and `~/.claude/skills/cc-team-lead/` |
+| Pi Skill Files | `~/.pi/agent/skills/pi-tmux/` |
 
 ### Claude Code Data
 
@@ -329,7 +331,7 @@ Project paths are encoded for Claude folder lookups by replacing `/` with `-`:
 ```
 src/cctmux/
 ├── __init__.py           # Package version
-├── __main__.py           # CLI entry points (7 Typer apps + config, layout, team subcommand groups)
+├── __main__.py           # CLI entry points (8 Typer apps + config, layout, team subcommand groups)
 ├── config.py             # Configuration models and presets
 ├── session_history.py    # Session tracking with Pydantic
 ├── tmux_manager.py       # Core tmux operations
@@ -343,17 +345,18 @@ src/cctmux/
 ├── ralph_monitor.py      # Ralph Loop live dashboard
 ├── xdg_paths.py          # XDG-compliant path management
 ├── utils.py              # Shared utilities
-└── skill/                # Bundled skill files (cc-tmux, cc-team-lead)
+├── skill/                # Bundled skill files (cc-tmux, cc-team-lead)
+└── skill-pi/             # Bundled pi agent skill files (pi-tmux)
 ```
 
 ### Module Responsibilities
 
 | Module | Responsibility |
 |--------|----------------|
-| `config.py` | Pydantic models for config, monitor-specific configs, custom layouts, team config, presets (`default`, `minimal`, `verbose`, `debug`), YAML I/O |
+| `config.py` | Pydantic models for config, monitor-specific configs, custom layouts, team config, pitmux config, presets (`default`, `minimal`, `verbose`, `debug`), YAML I/O |
 | `session_history.py` | Track recent sessions, LRU management, Pydantic models with YAML serialization |
-| `tmux_manager.py` | Session creation, attachment, environment variable setup, status bar configuration |
-| `layouts.py` | Pane splitting with captured pane IDs, command execution per layout |
+| `tmux_manager.py` | Session creation (`create_session`, `create_pi_session`, `create_team_session`), attachment, environment variable setup, status bar configuration |
+| `layouts.py` | Pane splitting with captured pane IDs, custom layout support, command execution per layout |
 | `task_monitor.py` | Parse task JSON, build ASCII dependency graphs, windowed virtual scrolling |
 | `session_monitor.py` | Parse JSONL events, compute statistics, cost estimation, path compression |
 | `subagent_monitor.py` | Discover and monitor subagent JSONL files, parse activity and token usage |
@@ -410,8 +413,11 @@ graph TD
 | `status_bar_enabled` | `bool` | `false` | Enable tmux status bar with git/project info |
 | `max_history_entries` | `int` | `50` | Maximum session history entries to keep |
 | `default_claude_args` | `str` or `null` | `null` | Default arguments passed to the `claude` command |
+| `default_pi_args` | `str` or `null` | `null` | Default arguments passed to the `pi` command |
+| `pi_session_prefix` | `str` | `"pi-"` | Prefix prepended to session names for pitmux |
 | `task_list_id` | `bool` | `false` | Set `CLAUDE_CODE_TASK_LIST_ID` to session name |
 | `agent_teams` | `bool` | `false` | Enable experimental agent teams (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`) |
+| `ignore_parent_configs` | `bool` | `false` | When set in a project config, skip user-level config |
 
 ### Configuration Presets
 

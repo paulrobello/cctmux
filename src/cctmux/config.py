@@ -215,6 +215,10 @@ class Config(BaseModel):
     task_list_id: bool = False
     agent_teams: bool = False
 
+    # pitmux (launches the `pi` coding agent in a tmux session)
+    default_pi_args: str | None = None
+    pi_session_prefix: str = "pi-"
+
     # When true in a project config, ignore all parent configs (user config)
     ignore_parent_configs: bool = False
 

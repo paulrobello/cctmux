@@ -117,6 +117,12 @@ task_list_id: false
 # Enable experimental agent teams
 agent_teams: false
 
+# Default arguments for pi command (used by pitmux)
+default_pi_args: null
+
+# Prefix for pitmux tmux session names
+pi_session_prefix: "pi-"
+
 # Skip user config when set in project config
 ignore_parent_configs: false
 
@@ -281,8 +287,11 @@ git_monitor:
 | `default_claude_args` | string | `null` | Default claude CLI arguments |
 | `task_list_id` | boolean | `false` | Set task list ID env var |
 | `agent_teams` | boolean | `false` | Enable experimental agent teams |
+| `default_pi_args` | string | `null` | Default CLI arguments for the `pi` command (used by `pitmux`) |
+| `pi_session_prefix` | string | `"pi-"` | Prefix for `pitmux` tmux session names. Set to `""` to disable (may collide with `cctmux` sessions) |
 | `ignore_parent_configs` | boolean | `false` | Skip user config (project configs only) |
 | `custom_layouts` | list | `[]` | Custom layout definitions |
+| `team` | object | `null` | Team configuration (typically set in project config, not user config) |
 
 ### Layout Options
 
@@ -603,6 +612,7 @@ cctmux sets environment variables in tmux sessions:
 | `CCTMUX_PROJECT_DIR` | Project directory path |
 | `CLAUDE_CODE_TASK_LIST_ID` | Session name (if `--task-list-id` enabled) |
 | `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | Set to `1` (if `--agent-teams` enabled) |
+| `CC2CC_SESSION_ID` | Unique per-pane UUID for cc2cc communication (team mode only) |
 
 ### Checking Environment Variables
 

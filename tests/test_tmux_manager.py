@@ -9,6 +9,7 @@ from cctmux.config import LayoutType
 from cctmux.tmux_manager import (
     attach_session,
     configure_status_bar,
+    create_pi_session,
     create_session,
     is_inside_tmux,
     list_panes,
@@ -192,3 +193,86 @@ class TestListPanes:
             panes = list_panes("test-session")
 
         assert panes == []
+
+
+class TestCreatePiSession:
+    """Tests for create_pi_session function."""
+
+    def test_dry_run_default_layout(self, tmp_path: Path) -> None:
+        """Should return commands without executing in dry run."""
+        commands = create_pi_session(
+            session_name="pi-test",
+            project_dir=tmp_path,
+            dry_run=True,
+        )
+        assert len(commands) >= 5
+        assert "new-session" in commands[0]
+        assert "pi-test" in commands[0]
+        assert str(tmp_path.resolve()) in commands[0]
+        assert "CCTMUX_SESSION" in commands[1]
+        assert "CCTMUX_PROJECT_DIR" in commands[2]
+        # The launched command must be `pi`, not `claude`
+        assert any(" pi " in c or c.rstrip().endswith(" pi") or c.endswith(" pi Enter") for c in commands)
+        assert not any("claude" in c for c in commands)
+        assert "attach-session" in commands[-1]
+
+    def test_dry_run_with_pi_args(self, tmp_path: Path) -> None:
+        """Should include pi args in the launch command."""
+        commands = create_pi_session(
+            session_name="pi-test",
+            project_dir=tmp_path,
+            pi_args="--model anthropic/claude-sonnet-4-6",
+            dry_run=True,
+        )
+        pi_launch = [c for c in commands if "pi --model anthropic/claude-sonnet-4-6" in c]
+        assert len(pi_launch) >= 1
+
+    def test_dry_run_with_continue_and_resume(self, tmp_path: Path) -> None:
+        """pi_args may carry --continue or --resume flags verbatim."""
+        commands = create_pi_session(
+            session_name="pi-test",
+            project_dir=tmp_path,
+            pi_args="--continue",
+            dry_run=True,
+        )
+        assert any("pi --continue" in c for c in commands)
+
+        commands = create_pi_session(
+            session_name="pi-test",
+            project_dir=tmp_path,
+            pi_args="--resume",
+            dry_run=True,
+        )
+        assert any("pi --resume" in c for c in commands)
+
+    def test_dry_run_no_claude_env_vars(self, tmp_path: Path) -> None:
+        """Must not set CLAUDE_CODE_TASK_LIST_ID or CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS."""
+        commands = create_pi_session(
+            session_name="pi-test",
+            project_dir=tmp_path,
+            dry_run=True,
+        )
+        assert not any("CLAUDE_CODE_TASK_LIST_ID" in c for c in commands)
+        assert not any("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS" in c for c in commands)
+
+    def test_dry_run_with_status_bar(self, tmp_path: Path) -> None:
+        """Should include status bar commands when enabled."""
+        commands = create_pi_session(
+            session_name="pi-test",
+            project_dir=tmp_path,
+            status_bar=True,
+            dry_run=True,
+        )
+        status_cmds = [c for c in commands if "status-style" in c or "status-left" in c or "status-right" in c]
+        assert len(status_cmds) >= 3
+
+    def test_dry_run_with_editor_layout(self, tmp_path: Path) -> None:
+        """Should include layout split commands."""
+        commands = create_pi_session(
+            session_name="pi-test",
+            project_dir=tmp_path,
+            layout=LayoutType.EDITOR,
+            dry_run=True,
+        )
+        split_cmds = [c for c in commands if "split-window" in c]
+        assert len(split_cmds) >= 1

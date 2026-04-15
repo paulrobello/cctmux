@@ -16,7 +16,7 @@ System design and data flow for cctmux. This document describes how the componen
 
 ## Overview
 
-cctmux is a CLI toolset that integrates Claude Code with tmux for enhanced session management and monitoring. The system consists of seven CLI entry points that share common modules for configuration, session tracking, and display rendering.
+cctmux is a CLI toolset that integrates Claude Code with tmux for enhanced session management and monitoring. The system consists of eight CLI entry points (seven for Claude Code, one for the pi coding agent) that share common modules for configuration, session tracking, and display rendering.
 
 ```mermaid
 graph TB
@@ -113,6 +113,7 @@ graph TB
 | `cctmux-activity` | `__main__.py:activity_app` | Usage statistics dashboard |
 | `cctmux-git` | `__main__.py:git_app` | Real-time git repository status monitor |
 | `cctmux-ralph` | `__main__.py:ralph_app` | Ralph Loop automation with `start`, `init`, `stop`, `cancel`, and `status` subcommands |
+| `pitmux` | `__main__.py:pi_app` | Launch the pi coding agent in a tmux session |
 
 ### Core Modules
 
@@ -329,7 +330,7 @@ Project paths are encoded for Claude folder lookups by replacing `/` with `-`:
 ```
 src/cctmux/
 ├── __init__.py           # Package version
-├── __main__.py           # CLI entry points (7 Typer apps + config, layout, team subcommand groups)
+├── __main__.py           # CLI entry points (8 Typer apps + config, layout, team subcommand groups)
 ├── config.py             # Configuration models and presets
 ├── session_history.py    # Session tracking with Pydantic
 ├── tmux_manager.py       # Core tmux operations
@@ -352,7 +353,7 @@ src/cctmux/
 |--------|----------------|
 | `config.py` | Pydantic models for config, monitor-specific configs, custom layouts, team config, presets (`default`, `minimal`, `verbose`, `debug`), YAML I/O |
 | `session_history.py` | Track recent sessions, LRU management, Pydantic models with YAML serialization |
-| `tmux_manager.py` | Session creation, attachment, environment variable setup, status bar configuration |
+| `tmux_manager.py` | Session creation (`create_session`, `create_pi_session`, `create_team_session`), attachment, environment variable setup, status bar configuration |
 | `layouts.py` | Pane splitting with captured pane IDs, command execution per layout |
 | `task_monitor.py` | Parse task JSON, build ASCII dependency graphs, windowed virtual scrolling |
 | `session_monitor.py` | Parse JSONL events, compute statistics, cost estimation, path compression |

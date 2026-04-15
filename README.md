@@ -41,6 +41,7 @@ Launch Claude Code inside tmux with session management, real-time monitoring, an
 - **Configuration Presets**: Quick access to minimal, verbose, or debug configurations
 - **Status Bar**: Optional tmux status bar showing git branch and project info
 - **Claude Skill**: Enables Claude to manage tmux panes for dev servers, watchers, etc.
+- **pitmux**: Launch the `pi` coding agent in tmux sessions with the same layout/config support
 - **Dry Run Mode**: Preview tmux commands without executing
 
 ```mermaid
@@ -152,11 +153,12 @@ cctmux -l ralph
 
 ## CLI Tools
 
-cctmux provides seven CLI commands:
+cctmux provides seven CLI commands for Claude Code, plus `pitmux` for the pi coding agent:
 
 | Command | Purpose |
 |---------|---------|
 | `cctmux` | Launch Claude Code in a tmux session |
+| `pitmux` | Launch the pi coding agent in a tmux session |
 | `cctmux-tasks` | Monitor Claude Code tasks in real-time |
 | `cctmux-session` | Monitor session events and statistics |
 | `cctmux-agents` | Monitor subagent activity |
@@ -195,8 +197,25 @@ cctmux init-config    # Create default configuration file
 cctmux install-skill  # Install the cc-tmux skill for Claude
 ```
 
-## Layouts
+### pitmux
 
+Launch the pi coding agent in a tmux session. Mirrors `cctmux`'s core flags
+(layout, status-bar, dry-run, `-c`/`-r`, config) and uses a configurable
+session prefix (`pi-` by default) so both tools can run simultaneously for
+the same project.
+
+```bash
+pitmux                          # Launch pi for the current project
+pitmux -c                       # Continue the previous pi session
+pitmux -r                       # Resume a pi session (select from list)
+pitmux --pi-args "--model x"    # Pass arguments to pi
+pitmux -l editor                # Use the editor layout
+pitmux --dry-run                # Preview commands
+```
+
+See [CLI Reference](docs/CLI_REFERENCE.md#pitmux) for the full options table.
+
+## Layouts
 | Layout | Description |
 |--------|-------------|
 | `default` | No initial splits (panes created on demand) |

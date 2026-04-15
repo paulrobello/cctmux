@@ -216,6 +216,64 @@ cctmux -c -a "--model sonnet"
 cctmux -y -c -a "--model opus"
 ```
 
+## pitmux
+
+Launch the `pi` coding agent inside a tmux session, mirroring the core `cctmux` UX.
+Sessions are prefixed (default `pi-`) so `cctmux` and `pitmux` can coexist for the same project.
+
+### Synopsis
+
+```bash
+pitmux [OPTIONS]
+```
+
+### Options
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--layout <name>` | `-l` | Tmux layout to use (built-in or custom name). |
+| `--recent` | `-R` | Select from recent sessions using fzf. |
+| `--resume` | `-r` | Append `--resume` to the pi invocation. |
+| `--continue` | `-c` | Append `--continue` to the pi invocation. |
+| `--status-bar` | `-s` | Enable status bar with git/project info. |
+| `--debug` | `-D` | Enable debug output. |
+| `--verbose` | `-v` | Increase verbosity (stackable). |
+| `--dry-run` | `-n` | Preview commands without executing. |
+| `--config <path>` | `-C` | Config file path. |
+| `--dump-config` | | Output current configuration. |
+| `--pi-args "..."` | `-a` | Arguments to pass through to `pi`. |
+| `--strict` | | Exit with error on config validation warnings. |
+| `--version` | | Show version. |
+
+### Examples
+
+```bash
+# Launch pi in the current project's tmux session
+pitmux
+
+# Resume the previous pi session
+pitmux -c
+
+# Pick a pi session to resume from a list
+pitmux -r
+
+# Use a specific model
+pitmux --pi-args "--model anthropic/claude-sonnet-4-6"
+
+# Use the editor layout
+pitmux -l editor
+
+# Preview what would run
+pitmux --dry-run
+```
+
+**Not supported (by design):** `--yolo`, `--task-list-id`, `--agent-teams`,
+team mode, companion monitors. These are Claude Code-specific.
+
+**Skill bundling:** Each `pitmux` run auto-installs the `pi-tmux` skill
+to `~/.pi/agent/skills/pi-tmux/` (created if missing). The skill teaches
+pi how to manage tmux panes using the same patterns as `cc-tmux`.
+
 ## cctmux-tasks
 
 Monitor Claude Code tasks in real-time with ASCII dependency visualization.

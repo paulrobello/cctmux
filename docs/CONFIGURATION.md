@@ -117,6 +117,12 @@ task_list_id: false
 # Enable experimental agent teams
 agent_teams: false
 
+# Default arguments for pi command (used by pitmux)
+default_pi_args: null
+
+# Prefix for pitmux tmux session names
+pi_session_prefix: "pi-"
+
 # Skip user config when set in project config
 ignore_parent_configs: false
 
@@ -281,6 +287,8 @@ git_monitor:
 | `default_claude_args` | string | `null` | Default claude CLI arguments |
 | `task_list_id` | boolean | `false` | Set task list ID env var |
 | `agent_teams` | boolean | `false` | Enable experimental agent teams |
+| `default_pi_args` | string | `null` | Default CLI arguments for the `pi` command (used by `pitmux`) |
+| `pi_session_prefix` | string | `"pi-"` | Prefix for `pitmux` tmux session names. Set to `""` to disable (may collide with `cctmux` sessions) |
 | `ignore_parent_configs` | boolean | `false` | Skip user config (project configs only) |
 | `custom_layouts` | list | `[]` | Custom layout definitions |
 

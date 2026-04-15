@@ -381,7 +381,21 @@ pitmux -l editor           # Use the editor layout
 pitmux --pi-args "--model anthropic/claude-sonnet-4-6"  # Pass arguments to pi
 ```
 
+### Install the Skill
+
+```bash
+pitmux install-skill
+```
+
+This copies the pi-tmux skill to `~/.pi/agent/skills/`.
+
 ### Configure
+
+Create a default configuration file:
+
+```bash
+pitmux init-config
+```
 
 Set defaults in `~/.config/cctmux/config.yaml` or `.cctmux.yaml`:
 

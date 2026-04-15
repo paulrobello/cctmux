@@ -247,6 +247,13 @@ pitmux [OPTIONS]
 | `--strict` | | Exit with error on config validation warnings. |
 | `--version` | | Show version. |
 
+### Subcommands
+
+| Command | Description |
+|---------|-------------|
+| `install-skill` | Install the pi-tmux skill to `~/.pi/agent/skills/` |
+| `init-config` | Create default configuration file |
+
 ### Examples
 
 ```bash
@@ -267,6 +274,12 @@ pitmux -l editor
 
 # Preview what would run
 pitmux --dry-run
+
+# Install the pi-tmux skill
+pitmux install-skill
+
+# Create default configuration
+pitmux init-config
 ```
 
 **Not supported (by design):** `--yolo`, `--task-list-id`, `--agent-teams`,

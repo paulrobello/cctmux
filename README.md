@@ -214,6 +214,8 @@ pitmux -r                       # Resume a pi session (select from list)
 pitmux --pi-args "--model x"    # Pass arguments to pi
 pitmux -l editor                # Use the editor layout
 pitmux --dry-run                # Preview commands
+pitmux install-skill            # Install the pi-tmux skill
+pitmux init-config              # Create default configuration file
 ```
 
 See [CLI Reference](docs/CLI_REFERENCE.md#pitmux) for the full options table.

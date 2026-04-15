@@ -450,9 +450,11 @@ pitmux --pi-args "--model anthropic/claude-sonnet-4-6"
 pitmux --resume                 # Resume last pi session
 pitmux --continue               # Continue previous session
 pitmux --dry-run                # Preview commands
+pitmux install-skill            # Install the pi-tmux skill to ~/.pi/agent/skills/
+pitmux init-config              # Create default configuration file
 ```
 
-The pi agent uses the same `CCTMUX_SESSION` and `CCTMUX_PROJECT_DIR` environment variables for tmux integration. A bundled `pi-tmux` skill auto-syncs to `~/.pi/agent/skills/` on each invocation.
+The pi agent uses the same `CCTMUX_SESSION` and `CCTMUX_PROJECT_DIR` environment variables for tmux integration. A bundled `pi-tmux` skill auto-syncs to `~/.pi/agent/skills/` on each invocation, or can be installed explicitly via `pitmux install-skill`.
 
 Config fields: `default_pi_args` and `pi_session_prefix` in `.cctmux.yaml`. See [Configuration](CONFIGURATION.md) and [CLI Reference](CLI_REFERENCE.md) for details.
 

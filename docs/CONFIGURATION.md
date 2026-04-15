@@ -72,6 +72,12 @@ Create a default configuration file:
 cctmux init-config
 ```
 
+For pitmux-specific configuration:
+
+```bash
+pitmux init-config
+```
+
 ### Viewing Current Configuration
 
 Display the effective configuration:

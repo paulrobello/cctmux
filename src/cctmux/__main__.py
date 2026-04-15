@@ -108,6 +108,52 @@ def _sync_skill() -> None:
             console.print(f"[dim]✓ {skill_src.name} skill updated ({skill_dest})[/]")
 
 
+def _sync_pi_skill() -> None:  # pyright: ignore[reportUnusedFunction]
+    """Auto-install bundled pi skills to ~/.pi/agent/skills/ if missing or outdated.
+
+    Compares the content hash of each bundled file against the installed copy.
+    Creates the destination tree (~/.pi/agent/skills/) if it does not exist.
+    Runs silently; prints a one-line notice only when an update is applied.
+    Called automatically on every pitmux invocation.
+    """
+    import hashlib
+    import shutil
+
+    skill_base = Path(__file__).parent / "skill-pi"
+    dest_base = Path.home() / ".pi" / "agent" / "skills"
+
+    if not skill_base.exists():
+        return
+
+    def _md5(path: Path) -> str:
+        return hashlib.md5(path.read_bytes()).hexdigest()  # noqa: S324
+
+    for skill_src in skill_base.iterdir():
+        if not skill_src.is_dir():
+            continue
+        skill_dest = dest_base / skill_src.name
+
+        needs_update = False
+        for src_file in skill_src.rglob("*"):
+            if not src_file.is_file():
+                continue
+            rel = src_file.relative_to(skill_src)
+            dest_file = skill_dest / rel
+            if not dest_file.exists() or _md5(src_file) != _md5(dest_file):
+                needs_update = True
+                break
+
+        if needs_update:
+            skill_dest.mkdir(parents=True, exist_ok=True)
+            for src_file in skill_src.rglob("*"):
+                if src_file.is_file():
+                    rel = src_file.relative_to(skill_src)
+                    dest_file = skill_dest / rel
+                    dest_file.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(src_file, dest_file)
+            console.print(f"[dim]✓ {skill_src.name} skill updated ({skill_dest})[/]")
+
+
 @app.command()
 def install_skill() -> None:
     """Install all bundled skills to ~/.claude/skills/."""

@@ -10,6 +10,7 @@ Get started with cctmux in minutes. This guide covers installation, basic usage,
 - [Monitoring Tools](#monitoring-tools)
 - [Ralph Loop](#ralph-loop)
 - [Layouts](#layouts)
+- [pitmux (pi Agent)](#pitmux-pi-agent)
 - [Team Mode Quick Start](#team-mode-quick-start)
 - [Next Steps](#next-steps)
 
@@ -356,6 +357,40 @@ cctmux -l git-mon
 │              │             │
 └──────────────┴─────────────┘
 ```
+
+## pitmux (pi Agent)
+
+Launch the pi coding agent inside tmux with the same session management as `cctmux`.
+
+### Start a pi Session
+
+```bash
+cd ~/my-project
+pitmux
+```
+
+This creates a tmux session with a `pi-` prefix (e.g., `pi-my-project`) and launches the pi coding agent inside it. The prefix avoids collisions with `cctmux` sessions for the same project.
+
+### Common Options
+
+```bash
+pitmux --dry-run           # Preview commands without executing
+pitmux -c                  # Continue the previous pi session
+pitmux -r                  # Resume a prior conversation
+pitmux -l editor           # Use the editor layout
+pitmux --pi-args "--model anthropic/claude-sonnet-4-6"  # Pass arguments to pi
+```
+
+### Configure
+
+Set defaults in `~/.config/cctmux/config.yaml` or `.cctmux.yaml`:
+
+```yaml
+default_pi_args: "--model anthropic/claude-sonnet-4-6"
+pi_session_prefix: "pi-"
+```
+
+> **Note:** Each `pitmux` run auto-installs the bundled `pi-tmux` skill to `~/.pi/agent/skills/`, enabling the pi agent to manage tmux panes.
 
 ## Team Mode Quick Start
 

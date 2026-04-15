@@ -235,7 +235,7 @@ The `create_team_session()` function in `tmux_manager.py`:
 2. Calls `compute_team_layout()` to determine pane split dimensions
 3. Splits the session window into N panes using the computed layout
 4. For each pane, exports environment variables and sends the `claude` command with role-specific flags
-5. Waits 3 seconds, then sends Enter to the team-lead pane to accept the cc2cc channel load prompt
+5. Waits 5 seconds, then sends Enter to the team-lead pane to accept the cc2cc channel load prompt
 
 ### Per-Pane Environment
 
@@ -261,13 +261,22 @@ Each Claude instance is launched with:
 - `--model` — per-agent model override (when `model` is set in the agent config)
 - Per-agent `claude_args` — overrides default Claude CLI args when specified
 
+The system prompt file written to `.cctmux/prompts/<role>.md` contains the user-defined prompt prepended with auto-generated team context:
+
+- The agent's role and team size
+- The cc2cc project topic name
+- Instructions to load required skills on startup
+  - Regular agents load `/cc2cc`
+  - Team leads (roles containing "lead") load `/cc-team-lead`, `/cc-tmux`, and `/cc2cc`
+- A `set_role()` call with the agent's role name
+
 > **Note:** The `.cctmux/` directory is automatically added to `.gitignore` to prevent prompt files from being committed.
 
 ### Accepting Skill Prompts
 
 After agents launch and load their skills (e.g., cc-tmux), they present a prompt question that requires pressing Enter to accept.
 
-**Team-lead pane (agent-0):** `cctmux team` automatically sends Enter to the team-lead pane after a 3-second delay to accept the cc2cc channel load prompt, so the lead can proceed without manual intervention.
+**Team-lead pane (agent-0):** `cctmux team` automatically sends Enter to the team-lead pane after a 5-second delay to accept the cc2cc channel load prompt, so the lead can proceed without manual intervention.
 
 **Other agent panes:** The team lead must send Enter to each remaining agent pane via tmux so they can accept the channel prompt and proceed:
 

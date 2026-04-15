@@ -17,6 +17,7 @@ Guide to using the cc-tmux skill with Claude Code. This skill enables Claude to 
 - [Ralph Loop](#ralph-loop)
 - [Custom Layouts](#custom-layouts)
 - [Team Mode](#team-mode)
+- [Pi Agent (pitmux)](#pi-agent-pitmux)
 - [Troubleshooting](#troubleshooting)
 - [Related Documentation](#related-documentation)
 
@@ -398,7 +399,7 @@ Session names are sanitized from the project folder name: converted to lowercase
 
 ## Monitors
 
-cctmux includes seven CLI entry points, five of which are dedicated real-time monitors:
+cctmux includes eight CLI entry points, five of which are dedicated real-time monitors:
 
 | Monitor | Description |
 |---------|-------------|
@@ -414,7 +415,7 @@ All monitors support `--preset` for quick configuration (`minimal`, `verbose`, `
 
 The Ralph Loop (`cctmux-ralph`) is an automated iterative development engine that reads a project markdown file, runs Claude in a loop, and tracks task completion. Subcommands include `start`, `status`, `cancel`, and `init`.
 
-Dedicated layouts are available: `ralph` (shell + ralph monitor) and `ralph-full` (Claude + git monitor + ralph monitor).
+Dedicated layouts are available: `ralph` (shell + ralph monitor) and `ralph-full` (Claude + git monitor + ralph monitor + task monitor).
 
 See [CLI Reference](CLI_REFERENCE.md) for full `cctmux-ralph` command documentation.
 
@@ -437,6 +438,23 @@ Custom layouts are stored in the config file under `custom_layouts` and can be u
 The `cctmux team` subcommand launches multiple Claude Code instances as a coordinated team in a single tmux session. Each agent gets a unique `CC2CC_SESSION_ID` for cc2cc session isolation and can be assigned a specific role via `--append-system-prompt`.
 
 Team configuration is loaded from a standalone YAML file or the `team:` key in `.cctmux.yaml`. See [CC2CC Team Guide](CC2CC_TEAM.md) for the full team mode documentation.
+
+## Pi Agent (pitmux)
+
+The `pitmux` entry point launches the [pi coding agent](https://github.com/paulrobello/pi) inside a tmux session, mirroring the core cctmux flags. Sessions are prefixed with `pi-` (configurable via `pi_session_prefix`) so `cctmux` and `pitmux` can coexist for the same project.
+
+```bash
+pitmux                          # Launch pi in a tmux session
+pitmux -l editor                # Use the editor layout
+pitmux --pi-args "--model anthropic/claude-sonnet-4-6"
+pitmux --resume                 # Resume last pi session
+pitmux --continue               # Continue previous session
+pitmux --dry-run                # Preview commands
+```
+
+The pi agent uses the same `CCTMUX_SESSION` and `CCTMUX_PROJECT_DIR` environment variables for tmux integration. A bundled `pi-tmux` skill auto-syncs to `~/.pi/agent/skills/` on each invocation.
+
+Config fields: `default_pi_args` and `pi_session_prefix` in `.cctmux.yaml`. See [Configuration](CONFIGURATION.md) and [CLI Reference](CLI_REFERENCE.md) for details.
 
 ## Troubleshooting
 
@@ -489,7 +507,7 @@ Commands going to the wrong pane, or commands appearing in the Claude input.
 ## Related Documentation
 
 - [Layouts Reference](LAYOUTS.md) - Predefined layout options and diagrams
-- [CLI Reference](CLI_REFERENCE.md) - Complete command documentation for all seven entry points
+- [CLI Reference](CLI_REFERENCE.md) - Complete command documentation for all eight entry points
 - [Configuration](CONFIGURATION.md) - Configuration file options and presets
 - [Quick Start](QUICKSTART.md) - Getting started guide
 - [Architecture](ARCHITECTURE.md) - System architecture overview

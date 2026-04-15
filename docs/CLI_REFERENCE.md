@@ -6,6 +6,7 @@ Complete reference for all cctmux command-line tools. Each tool includes all ava
 
 - [Overview](#overview)
 - [cctmux](#cctmux)
+- [pitmux](#pitmux)
 - [cctmux-tasks](#cctmux-tasks)
 - [cctmux-session](#cctmux-session)
 - [cctmux-agents](#cctmux-agents)
@@ -18,11 +19,12 @@ Complete reference for all cctmux command-line tools. Each tool includes all ava
 
 ## Overview
 
-cctmux provides seven CLI commands:
+cctmux provides eight CLI commands:
 
 | Command | Purpose |
 |---------|---------|
 | `cctmux` | Launch Claude Code in a tmux session |
+| `pitmux` | Launch the pi coding agent in a tmux session |
 | `cctmux-tasks` | Monitor Claude Code tasks |
 | `cctmux-session` | Monitor session events |
 | `cctmux-agents` | Monitor subagent activity |
@@ -76,7 +78,7 @@ cctmux [OPTIONS] [COMMAND]
 | `full-monitor` | Claude + session + tasks + activity |
 | `dashboard` | Large activity dashboard with session sidebar |
 | `ralph` | Shell + ralph monitor side-by-side (60/40) |
-| `ralph-full` | Claude + git monitor + ralph monitor + task monitor (2x2 grid) |
+| `ralph-full` | Shell + ralph monitor + task monitor |
 | `git-mon` | Claude (60%) + git status monitor (40%) |
 
 In addition to the predefined layouts, Claude can save and recall custom pane arrangements stored in the config file. See [Saved Layouts](LAYOUTS.md#saved-layouts) for details.
@@ -233,8 +235,8 @@ pitmux [OPTIONS]
 |------|-------|-------------|
 | `--layout <name>` | `-l` | Tmux layout to use (built-in or custom name). |
 | `--recent` | `-R` | Select from recent sessions using fzf. |
-| `--resume` | `-r` | Append `--resume` to the pi invocation. |
-| `--continue` | `-c` | Append `--continue` to the pi invocation. |
+| `--resume` | `-r` | Append `--resume` to the pi invocation to select a session to resume. |
+| `--continue` | `-c` | Append `--continue` to the pi invocation to continue the previous session. |
 | `--status-bar` | `-s` | Enable status bar with git/project info. |
 | `--debug` | `-D` | Enable debug output. |
 | `--verbose` | `-v` | Increase verbosity (stackable). |

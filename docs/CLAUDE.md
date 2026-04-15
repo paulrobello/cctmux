@@ -10,7 +10,7 @@ When updating documentation in this folder, use the DOCUMENTATION_STYLE_GUIDE.md
 - Include Table of Contents for documents over 500 words
 - Include a Related Documentation section at the end of each document
 
-This project has seven CLI entry points defined in pyproject.toml:
+This project has eight CLI entry points defined in pyproject.toml:
 
 | Entry Point | Typer App | Purpose |
 |-------------|-----------|---------|
@@ -21,13 +21,14 @@ This project has seven CLI entry points defined in pyproject.toml:
 | `cctmux-activity` | `activity_app` | Usage dashboard |
 | `cctmux-git` | `git_app` | Git repository status monitor |
 | `cctmux-ralph` | `ralph_app` | Ralph Loop automation |
+| `pitmux` | `pi_app` | pi coding agent launcher |
 
 Source modules in `src/cctmux/`:
 
 | Module | Purpose |
 |--------|---------|
 | `__init__.py` | Package version |
-| `__main__.py` | All seven Typer CLI apps |
+| `__main__.py` | All eight Typer CLI apps |
 | `config.py` | Pydantic config models, LayoutType enum, presets, YAML I/O |
 | `session_history.py` | Session tracking with Pydantic, YAML persistence |
 | `tmux_manager.py` | Session creation, attachment, environment setup, status bar |

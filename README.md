@@ -48,6 +48,7 @@ Launch Claude Code inside tmux with session management, real-time monitoring, an
 graph TB
     subgraph "cctmux CLI Tools"
         Main[cctmux]
+        Pitmux[pitmux]
         Tasks[cctmux-tasks]
         Session[cctmux-session]
         Agents[cctmux-agents]
@@ -74,6 +75,7 @@ graph TB
     end
 
     Main --> TmuxSession
+    Pitmux --> TmuxSession
     TmuxSession --> Panes
     Panes --> Claude
 
@@ -86,6 +88,7 @@ graph TB
     Ralph --> Claude
 
     style Main fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
+    style Pitmux fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
     style Tasks fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style Session fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style Agents fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
@@ -517,7 +520,7 @@ Install all bundled skills:
 cctmux install-skill
 ```
 
-Skills are also auto-synced on every `cctmux` invocation.
+Skills are also auto-synced on every `cctmux` invocation. The `pitmux` command auto-installs the `pi-tmux` skill to `~/.pi/agent/skills/`.
 
 ### cc-tmux
 
@@ -576,20 +579,21 @@ For detailed usage examples and best practices, see the [Skill Guide](docs/SKILL
 
 ## Environment Variables
 
-Inside a cctmux session:
+Inside a cctmux or pitmux session:
 
 | Variable | Description |
 |----------|-------------|
 | `CCTMUX_SESSION` | The tmux session name |
 | `CCTMUX_PROJECT_DIR` | The project directory path |
-| `CLAUDE_CODE_TASK_LIST_ID` | Session name (if `--task-list-id` enabled) |
-| `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | Set to `1` (if `--agent-teams` enabled) |
+| `CLAUDE_CODE_TASK_LIST_ID` | Session name (if `--task-list-id` enabled, cctmux only) |
+| `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | Set to `1` (if `--agent-teams` enabled, cctmux only) |
 
 ## Requirements
 
 - **Python**: 3.13+
 - **tmux**: Terminal multiplexer
 - **Claude Code**: Claude Code CLI (`claude`)
+- **pi**: Optional, pi coding agent CLI (`pi`) — required for `pitmux`
 - **fzf**: Optional, for `--recent` session selection
 
 ## Development
@@ -617,7 +621,7 @@ Full documentation is available in the `docs/` directory:
 
 - [Quick Start Guide](docs/QUICKSTART.md) - Get started in minutes
 - [Architecture](docs/ARCHITECTURE.md) - System design and data flow
-- [CLI Reference](docs/CLI_REFERENCE.md) - Complete reference for all seven entry points
+- [CLI Reference](docs/CLI_REFERENCE.md) - Complete reference for all eight entry points
 - [Layouts Reference](docs/LAYOUTS.md) - All ten predefined layouts with diagrams
 - [Skill Guide](docs/SKILL_GUIDE.md) - Using the cc-tmux skill with Claude
 - [Configuration](docs/CONFIGURATION.md) - Configuration options and presets

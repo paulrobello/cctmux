@@ -19,6 +19,7 @@ cctmux provides a seamless integration between Claude Code and tmux, enabling:
 - **Configuration**: YAML-based settings with layered merging (user, project, local), CLI overrides, and presets
 - **Team Mode**: Launch multiple Claude Code instances as a coordinated team with role-specific prompts and cc2cc communication
 - **Ralph Loop Automation**: Automated iterative Claude Code execution with task tracking, cost monitoring, and completion detection
+- **pi Agent Integration**: Launch the pi coding agent inside tmux via the `pitmux` entry point, with its own skill sync and session prefix
 
 ```mermaid
 graph TB
@@ -31,6 +32,7 @@ graph TB
         Activity[cctmux-activity]
         GitMon[cctmux-git]
         Ralph[cctmux-ralph]
+        Pitmux[pitmux]
     end
 
     subgraph "Tmux Integration"
@@ -55,6 +57,7 @@ graph TB
     Main --> TmuxSession
     Team --> TmuxSession
     Team --> CC2CC
+    Pitmux --> TmuxSession
     TmuxSession --> Panes
     TmuxSession --> StatusBar
     Panes --> Claude
@@ -75,6 +78,7 @@ graph TB
     style Activity fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
     style GitMon fill:#004d40,stroke:#00897b,stroke-width:2px,color:#ffffff
     style Ralph fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
+    style Pitmux fill:#b71c1c,stroke:#f44336,stroke-width:2px,color:#ffffff
     style TmuxSession fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style Panes fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style StatusBar fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
@@ -128,6 +132,7 @@ graph TB
 | `cctmux-ralph stop` | Stop after the current iteration finishes |
 | `cctmux-ralph cancel` | Cancel an active Ralph Loop immediately |
 | `cctmux-ralph status` | Show current Ralph Loop status (one-shot) |
+| `pitmux` | Launch the pi coding agent in a tmux session |
 
 ### Common Operations
 
@@ -203,6 +208,24 @@ cctmux-ralph stop
 
 # Cancel a running Ralph Loop immediately
 cctmux-ralph cancel
+
+# Launch the pi coding agent in a tmux session
+pitmux
+
+# Launch pi with a specific layout and extra arguments
+pitmux -l cc-mon --pi-args "--model anthropic/claude-sonnet-4-6"
+
+# Resume a previous pi session
+pitmux --resume
+
+# Continue the last pi session
+pitmux --continue
+
+# Select from recent pi sessions
+pitmux --recent
+
+# Dry-run to preview commands
+pitmux -n
 ```
 
 ## Related Documentation

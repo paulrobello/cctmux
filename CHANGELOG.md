@@ -4,6 +4,12 @@ All notable changes to cctmux will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.1] - 2026-04-27
+
+### Changed
+
+- **Cross-tool resume prompt now defaults to yes** — pressing Enter at the "Resume that instead?" prompt now accepts the sibling session instead of declining it, matching the common case of wanting to resume work in progress.
+
 ## [0.5.0] - 2026-04-27
 
 ### Added

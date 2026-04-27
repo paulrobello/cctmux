@@ -221,7 +221,7 @@ def _prompt_cross_tool_resume(
             continue
         if typer.confirm(
             f"No session '{target_name}' found, but {label} session '{name}' exists. Resume that instead?",
-            default=False,
+            default=True,
         ):
             return name
     return target_name

@@ -292,8 +292,9 @@ team mode, companion monitors. These are Claude Code-specific.
 **Cross-tool resume:** When `cctmux`, `pitmux`, `cdxtmux`, or `gemtmux` finds
 no matching session for the current project but one of the sibling tools'
 sessions for the same project exists, it prompts to attach to that session
-instead. Each tool checks all three other tools' prefixes. Skipped when stdin
-is not a TTY, when `--recent` is used, or with `--dry-run`.
+instead. The prompt defaults to yes — pressing Enter accepts. Each tool checks
+all three other tools' prefixes. Skipped when stdin is not a TTY, when
+`--recent` is used, or with `--dry-run`.
 
 ## cdxtmux
 

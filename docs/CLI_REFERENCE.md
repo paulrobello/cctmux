@@ -285,6 +285,12 @@ pitmux init-config
 **Not supported (by design):** `--yolo`, `--task-list-id`, `--agent-teams`,
 team mode, companion monitors. These are Claude Code-specific.
 
+**Cross-tool resume:** When `pitmux` finds no matching session for the current
+project but a `cctmux` session for the same project exists, it prompts to attach
+to that session instead. The reverse also applies: `cctmux` will offer to resume
+a `pi-`-prefixed `pitmux` session if no `cctmux` session exists. Skipped when
+stdin is not a TTY, when `--recent` is used, or with `--dry-run`.
+
 **Skill bundling:** Each `pitmux` run auto-installs the `pi-tmux` skill
 to `~/.pi/agent/skills/pi-tmux/` (created if missing). The skill teaches
 pi how to manage tmux panes using the same patterns as `cc-tmux`.

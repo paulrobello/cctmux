@@ -1,5 +1,6 @@
 """CLI entry point for cctmux."""
 
+import sys
 from pathlib import Path
 from typing import Annotated
 
@@ -377,6 +378,21 @@ def main(
         # Use current directory
         project_dir = Path.cwd()
         session_name = sanitize_session_name(get_project_name(project_dir))
+
+        # If no cctmux session exists but a pitmux session does, offer to resume it
+        if not dry_run and not session_exists(session_name):
+            pi_name = sanitize_session_name(f"{config.pi_session_prefix}{session_name}")
+            if (
+                pi_name != session_name
+                and session_exists(pi_name)
+                and sys.stdin.isatty()
+                and typer.confirm(
+                    f"No cctmux session '{session_name}' found, "
+                    f"but pitmux session '{pi_name}' exists. Resume that instead?",
+                    default=False,
+                )
+            ):
+                session_name = pi_name
 
     if debug or verbose > 0:
         console.print(f"[dim]Session: {session_name}[/]")
@@ -1877,6 +1893,21 @@ def pi_main(
         project_dir = Path.cwd()
         base_name = get_project_name(project_dir)
         session_name = sanitize_session_name(f"{config.pi_session_prefix}{base_name}")
+
+        # If no pitmux session exists but a cctmux session does, offer to resume it
+        if not dry_run and not session_exists(session_name):
+            cc_name = sanitize_session_name(base_name)
+            if (
+                cc_name != session_name
+                and session_exists(cc_name)
+                and sys.stdin.isatty()
+                and typer.confirm(
+                    f"No pitmux session '{session_name}' found, "
+                    f"but cctmux session '{cc_name}' exists. Resume that instead?",
+                    default=False,
+                )
+            ):
+                session_name = cc_name
 
     if debug or verbose > 0:
         console.print(f"[dim]Session: {session_name}[/]")

@@ -218,6 +218,10 @@ pitmux install-skill            # Install the pi-tmux skill
 pitmux init-config              # Create default configuration file
 ```
 
+If no `pitmux` session exists for the project but a `cctmux` session does
+(or vice versa), the launcher prompts to attach to the existing session
+instead of creating a new one.
+
 See [CLI Reference](docs/CLI_REFERENCE.md#pitmux) for the full options table.
 
 ## Layouts

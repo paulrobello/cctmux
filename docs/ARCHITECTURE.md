@@ -211,6 +211,12 @@ sequenceDiagram
         CLI->>TmuxMgr: attach_session(name)
         TmuxMgr->>Tmux: tmux attach-session
     else Session does not exist
+        CLI->>TmuxMgr: session_exists(cross_tool_name)
+        opt Cross-tool variant exists (and TTY)
+            CLI->>User: Prompt: resume cctmux/pitmux session?
+            User-->>CLI: y/n
+            CLI->>TmuxMgr: attach_session(cross_tool_name)
+        end
         CLI->>TmuxMgr: create_session(name, layout, ...)
         TmuxMgr->>Tmux: tmux new-session
         TmuxMgr->>Tmux: Set environment vars

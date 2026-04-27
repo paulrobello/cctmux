@@ -4,6 +4,12 @@ All notable changes to cctmux will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.1] - 2026-04-27
+
+### Added
+
+- **Cross-tool resume prompt** — when `cctmux` finds no session for the current project but a matching `pitmux` session (`pi-<project>`) exists, it prompts to attach to it instead. The reverse also applies for `pitmux`. Skipped when stdin is non-TTY, with `--recent`, or with `--dry-run`.
+
 ## [0.4.0] - 2026-04-15
 
 ### Added

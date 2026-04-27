@@ -96,6 +96,10 @@ cctmux
 # Output: Attaching to existing session: my-project
 ```
 
+If no `cctmux` session exists but a matching `pitmux` session (`pi-my-project`)
+does, cctmux prompts to attach to it instead. `pitmux` does the reverse for
+`cctmux` sessions.
+
 ### Select from Recent Sessions
 
 Use fzf to select from recent sessions:

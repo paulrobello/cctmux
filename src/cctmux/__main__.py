@@ -43,6 +43,8 @@ from cctmux.subagent_monitor import (
 from cctmux.task_monitor import list_sessions, run_monitor
 from cctmux.tmux_manager import (
     attach_session,
+    create_codex_session,
+    create_gemini_session,
     create_pi_session,
     create_session,
     create_team_session,
@@ -193,6 +195,36 @@ def install_skill() -> None:
 
     if installed == 0:
         err_console.print("[yellow]No skills found to install.[/]")
+
+
+def _prompt_cross_tool_resume(
+    target_name: str,
+    candidates: list[tuple[str, str]],
+    *,
+    dry_run: bool,
+) -> str:
+    """If target session does not exist, offer to resume a candidate session instead.
+
+    Args:
+        target_name: The session name the launcher would create.
+        candidates: List of (label, session_name) pairs to check, in order.
+        dry_run: If True, no prompt is shown and target_name is returned unchanged.
+
+    Returns:
+        The session name to use — either target_name or the first candidate
+        the user accepted.
+    """
+    if dry_run or session_exists(target_name) or not sys.stdin.isatty():
+        return target_name
+    for label, name in candidates:
+        if not name or name == target_name or not session_exists(name):
+            continue
+        if typer.confirm(
+            f"No session '{target_name}' found, but {label} session '{name}' exists. Resume that instead?",
+            default=False,
+        ):
+            return name
+    return target_name
 
 
 @app.callback(invoke_without_command=True)
@@ -379,20 +411,15 @@ def main(
         project_dir = Path.cwd()
         session_name = sanitize_session_name(get_project_name(project_dir))
 
-        # If no cctmux session exists but a pitmux session does, offer to resume it
-        if not dry_run and not session_exists(session_name):
-            pi_name = sanitize_session_name(f"{config.pi_session_prefix}{session_name}")
-            if (
-                pi_name != session_name
-                and session_exists(pi_name)
-                and sys.stdin.isatty()
-                and typer.confirm(
-                    f"No cctmux session '{session_name}' found, "
-                    f"but pitmux session '{pi_name}' exists. Resume that instead?",
-                    default=False,
-                )
-            ):
-                session_name = pi_name
+        # If no cctmux session exists, offer to resume a sibling pitmux/cdxtmux/gemtmux session
+        pi_name = sanitize_session_name(f"{config.pi_session_prefix}{session_name}")
+        cdx_name = sanitize_session_name(f"{config.codex_session_prefix}{session_name}")
+        gem_name = sanitize_session_name(f"{config.gemini_session_prefix}{session_name}")
+        session_name = _prompt_cross_tool_resume(
+            session_name,
+            [("pitmux", pi_name), ("cdxtmux", cdx_name), ("gemtmux", gem_name)],
+            dry_run=dry_run,
+        )
 
     if debug or verbose > 0:
         console.print(f"[dim]Session: {session_name}[/]")
@@ -1894,20 +1921,15 @@ def pi_main(
         base_name = get_project_name(project_dir)
         session_name = sanitize_session_name(f"{config.pi_session_prefix}{base_name}")
 
-        # If no pitmux session exists but a cctmux session does, offer to resume it
-        if not dry_run and not session_exists(session_name):
-            cc_name = sanitize_session_name(base_name)
-            if (
-                cc_name != session_name
-                and session_exists(cc_name)
-                and sys.stdin.isatty()
-                and typer.confirm(
-                    f"No pitmux session '{session_name}' found, "
-                    f"but cctmux session '{cc_name}' exists. Resume that instead?",
-                    default=False,
-                )
-            ):
-                session_name = cc_name
+        # If no pitmux session exists, offer to resume a sibling cctmux/cdxtmux/gemtmux session
+        cc_name = sanitize_session_name(base_name)
+        cdx_name = sanitize_session_name(f"{config.codex_session_prefix}{base_name}")
+        gem_name = sanitize_session_name(f"{config.gemini_session_prefix}{base_name}")
+        session_name = _prompt_cross_tool_resume(
+            session_name,
+            [("cctmux", cc_name), ("cdxtmux", cdx_name), ("gemtmux", gem_name)],
+            dry_run=dry_run,
+        )
 
     if debug or verbose > 0:
         console.print(f"[dim]Session: {session_name}[/]")
@@ -1943,6 +1965,500 @@ def pi_main(
             layout=effective_layout,
             status_bar=effective_status_bar,
             pi_args=effective_pi_args,
+            custom_layouts=config.custom_layouts,
+            dry_run=dry_run,
+        )
+
+        if dry_run:
+            console.print("[yellow]Commands that would be executed:[/]")
+            for cmd in commands:
+                console.print(f"  {cmd}")
+            console.print("[dim]Note: Actual execution uses pane IDs (%%N) for reliable targeting.[/]")
+
+    if not dry_run:
+        history = add_or_update_entry(
+            history,
+            session_name=session_name,
+            project_dir=str(project_dir.resolve()),
+            max_entries=config.max_history_entries,
+        )
+        save_history(history)
+
+
+cdx_app = typer.Typer(
+    name="cdxtmux",
+    help="Launch the codex CLI inside tmux with session management.",
+    no_args_is_help=False,
+)
+
+
+@cdx_app.command("init-config")
+def cdx_init_config() -> None:
+    """Create default configuration file."""
+    ensure_directories()
+    config_file = get_config_file_path()
+
+    if config_file.exists():
+        err_console.print(f"[yellow]Config file already exists:[/] {config_file}")
+        raise typer.Exit(1)
+
+    config = Config()
+    save_config(config)
+    console.print(f"[green]✓[/] Created config file: {config_file}")
+
+
+@cdx_app.callback(invoke_without_command=True)
+def cdx_main(
+    ctx: typer.Context,
+    layout: Annotated[
+        str,
+        typer.Option("--layout", "-l", help="Tmux layout to use (built-in or custom name)."),
+    ] = "default",
+    recent: Annotated[
+        bool,
+        typer.Option("--recent", "-R", help="Select from recent sessions using fzf."),
+    ] = False,
+    resume: Annotated[
+        bool,
+        typer.Option("--resume", "-r", help="Launch `codex resume` to pick a session to resume."),
+    ] = False,
+    status_bar: Annotated[
+        bool,
+        typer.Option("--status-bar", "-s", help="Enable status bar with git/project info."),
+    ] = False,
+    debug: Annotated[
+        bool,
+        typer.Option("--debug", "-D", help="Enable debug output."),
+    ] = False,
+    verbose: Annotated[
+        int,
+        typer.Option("--verbose", "-v", count=True, help="Increase verbosity."),
+    ] = 0,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", "-n", help="Preview commands without executing."),
+    ] = False,
+    config_path: Annotated[
+        Path | None,
+        typer.Option("--config", "-C", help="Config file path."),
+    ] = None,
+    continue_session: Annotated[
+        bool,
+        typer.Option("--continue", "-c", help="Launch `codex resume --last` to continue the most recent session."),
+    ] = False,
+    dump_config: Annotated[
+        bool,
+        typer.Option("--dump-config", help="Output current configuration."),
+    ] = False,
+    codex_args: Annotated[
+        str | None,
+        typer.Option(
+            "--codex-args",
+            "-a",
+            help="Arguments to pass to the codex command (e.g., '--model gpt-5').",
+        ),
+    ] = None,
+    yolo: Annotated[
+        bool,
+        typer.Option(
+            "--yolo",
+            "-y",
+            help="Append --dangerously-bypass-approvals-and-sandbox to codex invocation.",
+        ),
+    ] = False,
+    strict: Annotated[
+        bool,
+        typer.Option("--strict", help="Exit with error on config validation warnings."),
+    ] = False,
+    version: Annotated[
+        bool | None,
+        typer.Option("--version", callback=version_callback, is_eager=True, help="Show version."),
+    ] = None,
+) -> None:
+    """Launch the codex CLI in a tmux session for the current directory."""
+    if ctx.invoked_subcommand is not None:
+        return
+
+    ensure_directories()
+
+    config, config_warnings = load_config(config_path, project_dir=Path.cwd(), strict=strict)
+
+    if config_warnings:
+        display_config_warnings(config_warnings, err_console)
+        if strict:
+            raise typer.Exit(1)
+
+    if dump_config:
+        import yaml
+
+        data = config.model_dump()
+        data["default_layout"] = config.default_layout.value
+        console.print(yaml.dump(data, default_flow_style=False))
+        raise typer.Exit()
+
+    if layout != "default":
+        effective_layout: LayoutType | str = layout
+    else:
+        effective_layout = config.default_layout
+    effective_status_bar = status_bar or config.status_bar_enabled
+    effective_codex_args = codex_args if codex_args else config.default_codex_args
+    if yolo:
+        yolo_flag = "--dangerously-bypass-approvals-and-sandbox"
+        if effective_codex_args:
+            if yolo_flag not in effective_codex_args:
+                effective_codex_args = f"{effective_codex_args} {yolo_flag}"
+        else:
+            effective_codex_args = yolo_flag
+
+    # Codex resume is a subcommand, not a flag — track it separately
+    if continue_session:
+        resume_mode = "last"
+    elif resume:
+        resume_mode = "picker"
+    else:
+        resume_mode = "none"
+
+    if debug or verbose > 1:
+        console.print(f"[dim]Config file: {get_config_file_path()}[/]")
+        layout_display = effective_layout.value if isinstance(effective_layout, LayoutType) else effective_layout
+        console.print(f"[dim]Layout: {layout_display}[/]")
+        console.print(f"[dim]Status bar: {effective_status_bar}[/]")
+        console.print(f"[dim]Resume mode: {resume_mode}[/]")
+        if effective_codex_args:
+            console.print(f"[dim]codex args: {effective_codex_args}[/]")
+
+    if is_inside_tmux():
+        err_console.print("[red]Error:[/] Already inside a tmux session.")
+        err_console.print("[dim]Use standard tmux commands to manage panes.[/]")
+        raise typer.Exit(1)
+
+    history = load_history()
+
+    session_name: str
+    project_dir: Path
+
+    if recent:
+        if not is_fzf_available():
+            err_console.print("[red]Error:[/] fzf is required for --recent but not installed.")
+            raise typer.Exit(1)
+
+        recent_names = get_recent_session_names(history)
+        if not recent_names:
+            err_console.print("[yellow]No recent sessions found.[/]")
+            raise typer.Exit(1)
+
+        selected = select_with_fzf(recent_names, prompt="Session: ")
+        if not selected:
+            raise typer.Exit(0)
+
+        session_name = selected
+        entry = get_entry_by_name(history, session_name)
+        if entry:
+            project_dir = Path(entry.project_dir)
+            if not project_dir.exists():
+                err_console.print(f"[yellow]Warning:[/] Project directory no longer exists: {entry.project_dir}")
+                err_console.print("[dim]Falling back to current directory.[/]")
+                project_dir = Path.cwd()
+        else:
+            project_dir = Path.cwd()
+    else:
+        project_dir = Path.cwd()
+        base_name = get_project_name(project_dir)
+        session_name = sanitize_session_name(f"{config.codex_session_prefix}{base_name}")
+
+        # If no cdxtmux session exists, offer to resume a sibling cctmux/pitmux/gemtmux session
+        cc_name = sanitize_session_name(base_name)
+        pi_name = sanitize_session_name(f"{config.pi_session_prefix}{base_name}")
+        gem_name = sanitize_session_name(f"{config.gemini_session_prefix}{base_name}")
+        session_name = _prompt_cross_tool_resume(
+            session_name,
+            [("cctmux", cc_name), ("pitmux", pi_name), ("gemtmux", gem_name)],
+            dry_run=dry_run,
+        )
+
+    if debug or verbose > 0:
+        console.print(f"[dim]Session: {session_name}[/]")
+        console.print(f"[dim]Project: {project_dir}[/]")
+
+    if session_exists(session_name):
+        if verbose > 0 or dry_run:
+            console.print(f"[blue]Attaching to existing session:[/] {session_name}")
+
+        commands = attach_session(session_name, dry_run=dry_run)
+
+        if dry_run:
+            console.print("[yellow]Commands that would be executed:[/]")
+            for cmd in commands:
+                console.print(f"  {cmd}")
+    else:
+        if verbose > 0 or dry_run:
+            console.print(f"[green]Creating new session:[/] {session_name}")
+
+        try:
+            LayoutType(effective_layout)
+        except ValueError:
+            custom_match = [cl for cl in config.custom_layouts if cl.name == effective_layout]
+            if not custom_match:
+                err_console.print(f"[red]Error:[/] Unknown layout: {effective_layout}")
+                err_console.print("[dim]Use 'cctmux layout list' to see available layouts.[/]")
+                raise typer.Exit(1) from None
+
+        commands = create_codex_session(
+            session_name=session_name,
+            project_dir=project_dir,
+            layout=effective_layout,
+            status_bar=effective_status_bar,
+            codex_args=effective_codex_args,
+            resume_mode=resume_mode,
+            custom_layouts=config.custom_layouts,
+            dry_run=dry_run,
+        )
+
+        if dry_run:
+            console.print("[yellow]Commands that would be executed:[/]")
+            for cmd in commands:
+                console.print(f"  {cmd}")
+            console.print("[dim]Note: Actual execution uses pane IDs (%%N) for reliable targeting.[/]")
+
+    if not dry_run:
+        history = add_or_update_entry(
+            history,
+            session_name=session_name,
+            project_dir=str(project_dir.resolve()),
+            max_entries=config.max_history_entries,
+        )
+        save_history(history)
+
+
+gem_app = typer.Typer(
+    name="gemtmux",
+    help="Launch the gemini CLI inside tmux with session management.",
+    no_args_is_help=False,
+)
+
+
+@gem_app.command("init-config")
+def gem_init_config() -> None:
+    """Create default configuration file."""
+    ensure_directories()
+    config_file = get_config_file_path()
+
+    if config_file.exists():
+        err_console.print(f"[yellow]Config file already exists:[/] {config_file}")
+        raise typer.Exit(1)
+
+    config = Config()
+    save_config(config)
+    console.print(f"[green]✓[/] Created config file: {config_file}")
+
+
+@gem_app.callback(invoke_without_command=True)
+def gem_main(
+    ctx: typer.Context,
+    layout: Annotated[
+        str,
+        typer.Option("--layout", "-l", help="Tmux layout to use (built-in or custom name)."),
+    ] = "default",
+    recent: Annotated[
+        bool,
+        typer.Option("--recent", "-R", help="Select from recent sessions using fzf."),
+    ] = False,
+    resume: Annotated[
+        bool,
+        typer.Option(
+            "--resume",
+            "-r",
+            help="Append --resume latest to gemini invocation (gemini lacks an interactive picker; "
+            "for a specific session, use --gemini-args '--resume <id>').",
+        ),
+    ] = False,
+    status_bar: Annotated[
+        bool,
+        typer.Option("--status-bar", "-s", help="Enable status bar with git/project info."),
+    ] = False,
+    debug: Annotated[
+        bool,
+        typer.Option("--debug", "-D", help="Enable debug output."),
+    ] = False,
+    verbose: Annotated[
+        int,
+        typer.Option("--verbose", "-v", count=True, help="Increase verbosity."),
+    ] = 0,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", "-n", help="Preview commands without executing."),
+    ] = False,
+    config_path: Annotated[
+        Path | None,
+        typer.Option("--config", "-C", help="Config file path."),
+    ] = None,
+    continue_session: Annotated[
+        bool,
+        typer.Option(
+            "--continue", "-c", help="Append --resume latest to gemini invocation to continue the most recent session."
+        ),
+    ] = False,
+    dump_config: Annotated[
+        bool,
+        typer.Option("--dump-config", help="Output current configuration."),
+    ] = False,
+    gemini_args: Annotated[
+        str | None,
+        typer.Option(
+            "--gemini-args",
+            "-a",
+            help="Arguments to pass to the gemini command (e.g., '--model gemini-2.5-pro').",
+        ),
+    ] = None,
+    yolo: Annotated[
+        bool,
+        typer.Option("--yolo", "-y", help="Append --yolo to gemini invocation (auto-accept all actions)."),
+    ] = False,
+    strict: Annotated[
+        bool,
+        typer.Option("--strict", help="Exit with error on config validation warnings."),
+    ] = False,
+    version: Annotated[
+        bool | None,
+        typer.Option("--version", callback=version_callback, is_eager=True, help="Show version."),
+    ] = None,
+) -> None:
+    """Launch the gemini CLI in a tmux session for the current directory."""
+    if ctx.invoked_subcommand is not None:
+        return
+
+    ensure_directories()
+
+    config, config_warnings = load_config(config_path, project_dir=Path.cwd(), strict=strict)
+
+    if config_warnings:
+        display_config_warnings(config_warnings, err_console)
+        if strict:
+            raise typer.Exit(1)
+
+    if dump_config:
+        import yaml
+
+        data = config.model_dump()
+        data["default_layout"] = config.default_layout.value
+        console.print(yaml.dump(data, default_flow_style=False))
+        raise typer.Exit()
+
+    if layout != "default":
+        effective_layout: LayoutType | str = layout
+    else:
+        effective_layout = config.default_layout
+    effective_status_bar = status_bar or config.status_bar_enabled
+    effective_gemini_args = gemini_args if gemini_args else config.default_gemini_args
+
+    # Gemini's --resume takes a value (latest|<index>); both -c and -r map to "latest"
+    # since gemini lacks an interactive picker. Users wanting a specific index can
+    # pass it via --gemini-args.
+    if continue_session or resume:
+        resume_flag = "--resume latest"
+        if effective_gemini_args:
+            if "--resume" not in effective_gemini_args:
+                effective_gemini_args = f"{effective_gemini_args} {resume_flag}"
+        else:
+            effective_gemini_args = resume_flag
+    if yolo:
+        yolo_flag = "--yolo"
+        if effective_gemini_args:
+            if yolo_flag not in effective_gemini_args:
+                effective_gemini_args = f"{effective_gemini_args} {yolo_flag}"
+        else:
+            effective_gemini_args = yolo_flag
+
+    if debug or verbose > 1:
+        console.print(f"[dim]Config file: {get_config_file_path()}[/]")
+        layout_display = effective_layout.value if isinstance(effective_layout, LayoutType) else effective_layout
+        console.print(f"[dim]Layout: {layout_display}[/]")
+        console.print(f"[dim]Status bar: {effective_status_bar}[/]")
+        if effective_gemini_args:
+            console.print(f"[dim]gemini args: {effective_gemini_args}[/]")
+
+    if is_inside_tmux():
+        err_console.print("[red]Error:[/] Already inside a tmux session.")
+        err_console.print("[dim]Use standard tmux commands to manage panes.[/]")
+        raise typer.Exit(1)
+
+    history = load_history()
+
+    session_name: str
+    project_dir: Path
+
+    if recent:
+        if not is_fzf_available():
+            err_console.print("[red]Error:[/] fzf is required for --recent but not installed.")
+            raise typer.Exit(1)
+
+        recent_names = get_recent_session_names(history)
+        if not recent_names:
+            err_console.print("[yellow]No recent sessions found.[/]")
+            raise typer.Exit(1)
+
+        selected = select_with_fzf(recent_names, prompt="Session: ")
+        if not selected:
+            raise typer.Exit(0)
+
+        session_name = selected
+        entry = get_entry_by_name(history, session_name)
+        if entry:
+            project_dir = Path(entry.project_dir)
+            if not project_dir.exists():
+                err_console.print(f"[yellow]Warning:[/] Project directory no longer exists: {entry.project_dir}")
+                err_console.print("[dim]Falling back to current directory.[/]")
+                project_dir = Path.cwd()
+        else:
+            project_dir = Path.cwd()
+    else:
+        project_dir = Path.cwd()
+        base_name = get_project_name(project_dir)
+        session_name = sanitize_session_name(f"{config.gemini_session_prefix}{base_name}")
+
+        # If no gemtmux session exists, offer to resume a sibling cctmux/pitmux/cdxtmux session
+        cc_name = sanitize_session_name(base_name)
+        pi_name = sanitize_session_name(f"{config.pi_session_prefix}{base_name}")
+        cdx_name = sanitize_session_name(f"{config.codex_session_prefix}{base_name}")
+        session_name = _prompt_cross_tool_resume(
+            session_name,
+            [("cctmux", cc_name), ("pitmux", pi_name), ("cdxtmux", cdx_name)],
+            dry_run=dry_run,
+        )
+
+    if debug or verbose > 0:
+        console.print(f"[dim]Session: {session_name}[/]")
+        console.print(f"[dim]Project: {project_dir}[/]")
+
+    if session_exists(session_name):
+        if verbose > 0 or dry_run:
+            console.print(f"[blue]Attaching to existing session:[/] {session_name}")
+
+        commands = attach_session(session_name, dry_run=dry_run)
+
+        if dry_run:
+            console.print("[yellow]Commands that would be executed:[/]")
+            for cmd in commands:
+                console.print(f"  {cmd}")
+    else:
+        if verbose > 0 or dry_run:
+            console.print(f"[green]Creating new session:[/] {session_name}")
+
+        try:
+            LayoutType(effective_layout)
+        except ValueError:
+            custom_match = [cl for cl in config.custom_layouts if cl.name == effective_layout]
+            if not custom_match:
+                err_console.print(f"[red]Error:[/] Unknown layout: {effective_layout}")
+                err_console.print("[dim]Use 'cctmux layout list' to see available layouts.[/]")
+                raise typer.Exit(1) from None
+
+        commands = create_gemini_session(
+            session_name=session_name,
+            project_dir=project_dir,
+            layout=effective_layout,
+            status_bar=effective_status_bar,
+            gemini_args=effective_gemini_args,
             custom_layouts=config.custom_layouts,
             dry_run=dry_run,
         )

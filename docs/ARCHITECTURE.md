@@ -16,7 +16,7 @@ System design and data flow for cctmux. This document describes how the componen
 
 ## Overview
 
-cctmux is a CLI toolset that integrates Claude Code with tmux for enhanced session management and monitoring. The system consists of eight CLI entry points (seven for Claude Code, one for the pi coding agent) that share common modules for configuration, session tracking, and display rendering.
+cctmux is a CLI toolset that integrates Claude Code with tmux for enhanced session management and monitoring. The system consists of ten CLI entry points (seven for Claude Code, one for the pi coding agent, one for the codex CLI, one for the gemini CLI) that share common modules for configuration, session tracking, and display rendering.
 
 ```mermaid
 graph TB
@@ -114,6 +114,8 @@ graph TB
 | `cctmux-git` | `__main__.py:git_app` | Real-time git repository status monitor |
 | `cctmux-ralph` | `__main__.py:ralph_app` | Ralph Loop automation with `start`, `init`, `stop`, `cancel`, and `status` subcommands |
 | `pitmux` | `__main__.py:pi_app` | Launch the pi coding agent in a tmux session |
+| `cdxtmux` | `__main__.py:cdx_app` | Launch the codex CLI in a tmux session |
+| `gemtmux` | `__main__.py:gem_app` | Launch the gemini CLI in a tmux session |
 
 ### Core Modules
 
@@ -213,7 +215,7 @@ sequenceDiagram
     else Session does not exist
         CLI->>TmuxMgr: session_exists(cross_tool_name)
         opt Cross-tool variant exists (and TTY)
-            CLI->>User: Prompt: resume cctmux/pitmux session?
+            CLI->>User: Prompt: resume sibling cctmux/pitmux/cdxtmux/gemtmux session?
             User-->>CLI: y/n
             CLI->>TmuxMgr: attach_session(cross_tool_name)
         end
@@ -359,9 +361,9 @@ src/cctmux/
 
 | Module | Responsibility |
 |--------|----------------|
-| `config.py` | Pydantic models for config, monitor-specific configs, custom layouts, team config, pitmux config, presets (`default`, `minimal`, `verbose`, `debug`), YAML I/O |
+| `config.py` | Pydantic models for config, monitor-specific configs, custom layouts, team config, pitmux config, cdxtmux config, gemtmux config, presets (`default`, `minimal`, `verbose`, `debug`), YAML I/O |
 | `session_history.py` | Track recent sessions, LRU management, Pydantic models with YAML serialization |
-| `tmux_manager.py` | Session creation (`create_session`, `create_pi_session`, `create_team_session`), attachment, environment variable setup, status bar configuration |
+| `tmux_manager.py` | Session creation (`create_session`, `create_pi_session`, `create_codex_session`, `create_gemini_session`, `create_team_session`), attachment, environment variable setup, status bar configuration |
 | `layouts.py` | Pane splitting with captured pane IDs, custom layout support, command execution per layout |
 | `task_monitor.py` | Parse task JSON, build ASCII dependency graphs, windowed virtual scrolling |
 | `session_monitor.py` | Parse JSONL events, compute statistics, cost estimation, path compression |
@@ -421,6 +423,10 @@ graph TD
 | `default_claude_args` | `str` or `null` | `null` | Default arguments passed to the `claude` command |
 | `default_pi_args` | `str` or `null` | `null` | Default arguments passed to the `pi` command |
 | `pi_session_prefix` | `str` | `"pi-"` | Prefix prepended to session names for pitmux |
+| `default_codex_args` | `str` or `null` | `null` | Default arguments passed to the `codex` command |
+| `codex_session_prefix` | `str` | `"cdx-"` | Prefix prepended to session names for cdxtmux |
+| `default_gemini_args` | `str` or `null` | `null` | Default arguments passed to the `gemini` command |
+| `gemini_session_prefix` | `str` | `"gem-"` | Prefix prepended to session names for gemtmux |
 | `task_list_id` | `bool` | `false` | Set `CLAUDE_CODE_TASK_LIST_ID` to session name |
 | `agent_teams` | `bool` | `false` | Enable experimental agent teams (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`) |
 | `ignore_parent_configs` | `bool` | `false` | When set in a project config, skip user-level config |

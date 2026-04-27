@@ -9,6 +9,8 @@ from cctmux.config import LayoutType
 from cctmux.tmux_manager import (
     attach_session,
     configure_status_bar,
+    create_codex_session,
+    create_gemini_session,
     create_pi_session,
     create_session,
     is_inside_tmux,
@@ -270,6 +272,184 @@ class TestCreatePiSession:
         """Should include layout split commands."""
         commands = create_pi_session(
             session_name="pi-test",
+            project_dir=tmp_path,
+            layout=LayoutType.EDITOR,
+            dry_run=True,
+        )
+        split_cmds = [c for c in commands if "split-window" in c]
+        assert len(split_cmds) >= 1
+
+
+class TestCreateCodexSession:
+    """Tests for create_codex_session function."""
+
+    def test_dry_run_default_launches_codex(self, tmp_path: Path) -> None:
+        """Default invocation runs `codex` (no resume subcommand)."""
+        commands = create_codex_session(
+            session_name="cdx-test",
+            project_dir=tmp_path,
+            dry_run=True,
+        )
+        assert len(commands) >= 5
+        assert "new-session" in commands[0]
+        assert "cdx-test" in commands[0]
+        assert "CCTMUX_SESSION" in commands[1]
+        assert "CCTMUX_PROJECT_DIR" in commands[2]
+        assert any(c.endswith(" codex Enter") for c in commands)
+        assert not any("claude" in c for c in commands)
+        assert not any(" pi " in c for c in commands)
+        assert "attach-session" in commands[-1]
+
+    def test_dry_run_with_codex_args(self, tmp_path: Path) -> None:
+        """codex_args appear after `codex`."""
+        commands = create_codex_session(
+            session_name="cdx-test",
+            project_dir=tmp_path,
+            codex_args="--model gpt-5",
+            dry_run=True,
+        )
+        assert any("codex --model gpt-5" in c for c in commands)
+
+    def test_dry_run_resume_picker(self, tmp_path: Path) -> None:
+        """resume_mode='picker' launches `codex resume`."""
+        commands = create_codex_session(
+            session_name="cdx-test",
+            project_dir=tmp_path,
+            resume_mode="picker",
+            dry_run=True,
+        )
+        assert any("codex resume Enter" in c for c in commands)
+
+    def test_dry_run_resume_last(self, tmp_path: Path) -> None:
+        """resume_mode='last' launches `codex resume --last`."""
+        commands = create_codex_session(
+            session_name="cdx-test",
+            project_dir=tmp_path,
+            resume_mode="last",
+            dry_run=True,
+        )
+        assert any("codex resume --last Enter" in c for c in commands)
+
+    def test_dry_run_resume_last_with_codex_args(self, tmp_path: Path) -> None:
+        """codex_args are appended after `codex resume --last`."""
+        commands = create_codex_session(
+            session_name="cdx-test",
+            project_dir=tmp_path,
+            codex_args="--model gpt-5",
+            resume_mode="last",
+            dry_run=True,
+        )
+        assert any("codex resume --last --model gpt-5" in c for c in commands)
+
+    def test_dry_run_no_claude_env_vars(self, tmp_path: Path) -> None:
+        """Must not set CLAUDE_CODE_TASK_LIST_ID or CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS."""
+        commands = create_codex_session(
+            session_name="cdx-test",
+            project_dir=tmp_path,
+            dry_run=True,
+        )
+        assert not any("CLAUDE_CODE_TASK_LIST_ID" in c for c in commands)
+        assert not any("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS" in c for c in commands)
+
+    def test_dry_run_with_status_bar(self, tmp_path: Path) -> None:
+        """Should include status bar commands when enabled."""
+        commands = create_codex_session(
+            session_name="cdx-test",
+            project_dir=tmp_path,
+            status_bar=True,
+            dry_run=True,
+        )
+        status_cmds = [c for c in commands if "status-style" in c or "status-left" in c or "status-right" in c]
+        assert len(status_cmds) >= 3
+
+    def test_dry_run_with_editor_layout(self, tmp_path: Path) -> None:
+        """Should include layout split commands."""
+        commands = create_codex_session(
+            session_name="cdx-test",
+            project_dir=tmp_path,
+            layout=LayoutType.EDITOR,
+            dry_run=True,
+        )
+        split_cmds = [c for c in commands if "split-window" in c]
+        assert len(split_cmds) >= 1
+
+
+class TestCreateGeminiSession:
+    """Tests for create_gemini_session function."""
+
+    def test_dry_run_default_launches_gemini(self, tmp_path: Path) -> None:
+        """Default invocation runs `gemini` with no args."""
+        commands = create_gemini_session(
+            session_name="gem-test",
+            project_dir=tmp_path,
+            dry_run=True,
+        )
+        assert len(commands) >= 5
+        assert "new-session" in commands[0]
+        assert "gem-test" in commands[0]
+        assert "CCTMUX_SESSION" in commands[1]
+        assert "CCTMUX_PROJECT_DIR" in commands[2]
+        assert any(c.endswith(" gemini Enter") for c in commands)
+        assert not any("claude" in c for c in commands)
+        assert not any(" pi " in c for c in commands)
+        assert not any(" codex" in c for c in commands)
+        assert "attach-session" in commands[-1]
+
+    def test_dry_run_with_gemini_args(self, tmp_path: Path) -> None:
+        """gemini_args appear after `gemini`."""
+        commands = create_gemini_session(
+            session_name="gem-test",
+            project_dir=tmp_path,
+            gemini_args="--model gemini-2.5-pro",
+            dry_run=True,
+        )
+        assert any("gemini --model gemini-2.5-pro" in c for c in commands)
+
+    def test_dry_run_with_resume_latest(self, tmp_path: Path) -> None:
+        """gemini_args may carry --resume latest verbatim."""
+        commands = create_gemini_session(
+            session_name="gem-test",
+            project_dir=tmp_path,
+            gemini_args="--resume latest",
+            dry_run=True,
+        )
+        assert any("gemini --resume latest" in c for c in commands)
+
+    def test_dry_run_with_yolo(self, tmp_path: Path) -> None:
+        """gemini_args may carry --yolo verbatim."""
+        commands = create_gemini_session(
+            session_name="gem-test",
+            project_dir=tmp_path,
+            gemini_args="--yolo",
+            dry_run=True,
+        )
+        assert any("gemini --yolo" in c for c in commands)
+
+    def test_dry_run_no_claude_env_vars(self, tmp_path: Path) -> None:
+        """Must not set CLAUDE_CODE_TASK_LIST_ID or CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS."""
+        commands = create_gemini_session(
+            session_name="gem-test",
+            project_dir=tmp_path,
+            dry_run=True,
+        )
+        assert not any("CLAUDE_CODE_TASK_LIST_ID" in c for c in commands)
+        assert not any("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS" in c for c in commands)
+
+    def test_dry_run_with_status_bar(self, tmp_path: Path) -> None:
+        """Should include status bar commands when enabled."""
+        commands = create_gemini_session(
+            session_name="gem-test",
+            project_dir=tmp_path,
+            status_bar=True,
+            dry_run=True,
+        )
+        status_cmds = [c for c in commands if "status-style" in c or "status-left" in c or "status-right" in c]
+        assert len(status_cmds) >= 3
+
+    def test_dry_run_with_editor_layout(self, tmp_path: Path) -> None:
+        """Should include layout split commands."""
+        commands = create_gemini_session(
+            session_name="gem-test",
             project_dir=tmp_path,
             layout=LayoutType.EDITOR,
             dry_run=True,

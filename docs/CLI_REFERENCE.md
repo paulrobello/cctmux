@@ -7,6 +7,8 @@ Complete reference for all cctmux command-line tools. Each tool includes all ava
 - [Overview](#overview)
 - [cctmux](#cctmux)
 - [pitmux](#pitmux)
+- [cdxtmux](#cdxtmux)
+- [gemtmux](#gemtmux)
 - [cctmux-tasks](#cctmux-tasks)
 - [cctmux-session](#cctmux-session)
 - [cctmux-agents](#cctmux-agents)
@@ -19,12 +21,14 @@ Complete reference for all cctmux command-line tools. Each tool includes all ava
 
 ## Overview
 
-cctmux provides eight CLI commands:
+cctmux provides ten CLI commands:
 
 | Command | Purpose |
 |---------|---------|
 | `cctmux` | Launch Claude Code in a tmux session |
 | `pitmux` | Launch the pi coding agent in a tmux session |
+| `cdxtmux` | Launch the codex CLI in a tmux session |
+| `gemtmux` | Launch the gemini CLI in a tmux session |
 | `cctmux-tasks` | Monitor Claude Code tasks |
 | `cctmux-session` | Monitor session events |
 | `cctmux-agents` | Monitor subagent activity |
@@ -285,11 +289,158 @@ pitmux init-config
 **Not supported (by design):** `--yolo`, `--task-list-id`, `--agent-teams`,
 team mode, companion monitors. These are Claude Code-specific.
 
-**Cross-tool resume:** When `pitmux` finds no matching session for the current
-project but a `cctmux` session for the same project exists, it prompts to attach
-to that session instead. The reverse also applies: `cctmux` will offer to resume
-a `pi-`-prefixed `pitmux` session if no `cctmux` session exists. Skipped when
-stdin is not a TTY, when `--recent` is used, or with `--dry-run`.
+**Cross-tool resume:** When `cctmux`, `pitmux`, `cdxtmux`, or `gemtmux` finds
+no matching session for the current project but one of the sibling tools'
+sessions for the same project exists, it prompts to attach to that session
+instead. Each tool checks all three other tools' prefixes. Skipped when stdin
+is not a TTY, when `--recent` is used, or with `--dry-run`.
+
+## cdxtmux
+
+Launch the `codex` CLI inside a tmux session, mirroring the core `cctmux` UX.
+Sessions are prefixed (default `cdx-`) so `cctmux`, `pitmux`, and `cdxtmux` can
+coexist for the same project.
+
+### Synopsis
+
+```bash
+cdxtmux [OPTIONS]
+```
+
+### Options
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--layout <name>` | `-l` | Tmux layout to use (built-in or custom name). |
+| `--recent` | `-R` | Select from recent sessions using fzf. |
+| `--resume` | `-r` | Launch `codex resume` to pick a session to resume. |
+| `--continue` | `-c` | Launch `codex resume --last` to continue the most recent session. |
+| `--yolo` | `-y` | Append `--dangerously-bypass-approvals-and-sandbox` to the codex invocation. |
+| `--status-bar` | `-s` | Enable status bar with git/project info. |
+| `--debug` | `-D` | Enable debug output. |
+| `--verbose` | `-v` | Increase verbosity (stackable). |
+| `--dry-run` | `-n` | Preview commands without executing. |
+| `--config <path>` | `-C` | Config file path. |
+| `--dump-config` | | Output current configuration. |
+| `--codex-args "..."` | `-a` | Arguments to pass through to `codex`. |
+| `--strict` | | Exit with error on config validation warnings. |
+| `--version` | | Show version. |
+
+### Subcommands
+
+| Command | Description |
+|---------|-------------|
+| `init-config` | Create default configuration file |
+
+### Examples
+
+```bash
+# Launch codex in the current project's tmux session
+cdxtmux
+
+# Continue the most recent codex session (codex resume --last)
+cdxtmux -c
+
+# Pick a codex session to resume (codex resume picker)
+cdxtmux -r
+
+# Use a specific model
+cdxtmux --codex-args "--model gpt-5"
+
+# Yolo mode (skip approvals + sandbox)
+cdxtmux -y
+
+# Use the editor layout
+cdxtmux -l editor
+
+# Preview what would run
+cdxtmux --dry-run
+
+# Create default configuration
+cdxtmux init-config
+```
+
+**Resume vs flags:** Codex expresses session resumption via a `resume`
+subcommand rather than a flag, so `--resume` and `--continue` insert the
+appropriate `resume` (or `resume --last`) subcommand before any `--codex-args`
+when launching codex.
+
+**Not supported (by design):** `--task-list-id`, `--agent-teams`, team mode,
+companion monitors. These are Claude Code-specific.
+
+## gemtmux
+
+Launch the `gemini` CLI inside a tmux session, mirroring the core `cctmux` UX.
+Sessions are prefixed (default `gem-`) so all four launchers can coexist for
+the same project.
+
+### Synopsis
+
+```bash
+gemtmux [OPTIONS]
+```
+
+### Options
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--layout <name>` | `-l` | Tmux layout to use (built-in or custom name). |
+| `--recent` | `-R` | Select from recent sessions using fzf. |
+| `--resume` | `-r` | Append `--resume latest` to gemini invocation (no separate picker — see note below). |
+| `--continue` | `-c` | Append `--resume latest` to gemini invocation to continue the most recent session. |
+| `--yolo` | `-y` | Append `--yolo` to gemini invocation (auto-accept all actions). |
+| `--status-bar` | `-s` | Enable status bar with git/project info. |
+| `--debug` | `-D` | Enable debug output. |
+| `--verbose` | `-v` | Increase verbosity (stackable). |
+| `--dry-run` | `-n` | Preview commands without executing. |
+| `--config <path>` | `-C` | Config file path. |
+| `--dump-config` | | Output current configuration. |
+| `--gemini-args "..."` | `-a` | Arguments to pass through to `gemini`. |
+| `--strict` | | Exit with error on config validation warnings. |
+| `--version` | | Show version. |
+
+### Subcommands
+
+| Command | Description |
+|---------|-------------|
+| `init-config` | Create default configuration file |
+
+### Examples
+
+```bash
+# Launch gemini in the current project's tmux session
+gemtmux
+
+# Continue the most recent gemini session (gemini --resume latest)
+gemtmux -c
+
+# Yolo mode (auto-accept all actions)
+gemtmux -y
+
+# Use a specific model
+gemtmux --gemini-args "--model gemini-2.5-pro"
+
+# Resume a specific indexed session (use --gemini-args)
+gemtmux --gemini-args "--resume 5"
+
+# Use the editor layout
+gemtmux -l editor
+
+# Preview what would run
+gemtmux --dry-run
+
+# Create default configuration
+gemtmux init-config
+```
+
+**Resume note:** Gemini's `--resume` flag accepts `latest` or a numeric index;
+it has no interactive picker UI. Both `-c` and `-r` map to `--resume latest`
+for parity with the other launchers. To resume a specific indexed session,
+pass `--gemini-args "--resume <id>"` (use `gemini --list-sessions` to see
+available sessions).
+
+**Not supported (by design):** `--task-list-id`, `--agent-teams`, team mode,
+companion monitors. These are Claude Code-specific.
 
 **Skill bundling:** Each `pitmux` run auto-installs the `pi-tmux` skill
 to `~/.pi/agent/skills/pi-tmux/` (created if missing). The skill teaches

@@ -78,6 +78,18 @@ For pitmux-specific configuration:
 pitmux init-config
 ```
 
+For cdxtmux-specific configuration:
+
+```bash
+cdxtmux init-config
+```
+
+For gemtmux-specific configuration:
+
+```bash
+gemtmux init-config
+```
+
 ### Viewing Current Configuration
 
 Display the effective configuration:
@@ -128,6 +140,18 @@ default_pi_args: null
 
 # Prefix for pitmux tmux session names
 pi_session_prefix: "pi-"
+
+# Default arguments for codex command (used by cdxtmux)
+default_codex_args: null
+
+# Prefix for cdxtmux tmux session names
+codex_session_prefix: "cdx-"
+
+# Default arguments for gemini command (used by gemtmux)
+default_gemini_args: null
+
+# Prefix for gemtmux tmux session names
+gemini_session_prefix: "gem-"
 
 # Skip user config when set in project config
 ignore_parent_configs: false
@@ -295,6 +319,10 @@ git_monitor:
 | `agent_teams` | boolean | `false` | Enable experimental agent teams |
 | `default_pi_args` | string | `null` | Default CLI arguments for the `pi` command (used by `pitmux`) |
 | `pi_session_prefix` | string | `"pi-"` | Prefix for `pitmux` tmux session names. Set to `""` to disable (may collide with `cctmux` sessions) |
+| `default_codex_args` | string | `null` | Default CLI arguments for the `codex` command (used by `cdxtmux`) |
+| `codex_session_prefix` | string | `"cdx-"` | Prefix for `cdxtmux` tmux session names. Set to `""` to disable (may collide with `cctmux`/`pitmux` sessions) |
+| `default_gemini_args` | string | `null` | Default CLI arguments for the `gemini` command (used by `gemtmux`) |
+| `gemini_session_prefix` | string | `"gem-"` | Prefix for `gemtmux` tmux session names. Set to `""` to disable (may collide with sibling launchers' sessions) |
 | `ignore_parent_configs` | boolean | `false` | Skip user config (project configs only) |
 | `custom_layouts` | list | `[]` | Custom layout definitions |
 | `team` | object | `null` | Team configuration (typically set in project config, not user config) |

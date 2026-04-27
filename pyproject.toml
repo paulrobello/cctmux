@@ -60,6 +60,8 @@ cctmux-activity = "cctmux.__main__:activity_app"
 cctmux-git = "cctmux.__main__:git_app"
 cctmux-ralph = "cctmux.__main__:ralph_app"
 pitmux = "cctmux.__main__:pi_app"
+cdxtmux = "cctmux.__main__:cdx_app"
+gemtmux = "cctmux.__main__:gem_app"
 
 [dependency-groups]
 dev = [

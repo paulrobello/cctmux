@@ -213,6 +213,162 @@ def create_pi_session(
     return commands
 
 
+def create_codex_session(
+    session_name: str,
+    project_dir: Path,
+    layout: LayoutType | str = LayoutType.DEFAULT,
+    status_bar: bool = False,
+    codex_args: str | None = None,
+    resume_mode: str = "none",
+    custom_layouts: list[CustomLayout] | None = None,
+    dry_run: bool = False,
+) -> list[str]:
+    """Create a new tmux session and launch the codex CLI.
+
+    Mirrors create_pi_session but runs `codex` instead of `pi`. The codex CLI
+    expresses session resumption via a `resume` subcommand rather than a flag,
+    so resume_mode controls whether the launched command is plain `codex`,
+    `codex resume` (picker), or `codex resume --last` (continue).
+
+    Args:
+        session_name: The session name.
+        project_dir: The project directory.
+        layout: The layout to apply (built-in or custom name).
+        status_bar: Whether to enable status bar.
+        codex_args: Additional arguments to pass to the codex command.
+        resume_mode: One of "none", "picker" (resume), or "last" (resume --last).
+        custom_layouts: Optional list of custom layouts for name resolution.
+        dry_run: If True, return commands without executing.
+
+    Returns:
+        List of commands that were (or would be) executed.
+    """
+    commands: list[str] = []
+    dir_str = str(project_dir.resolve())
+
+    cmd = ["tmux", "new-session", "-d", "-s", session_name, "-c", dir_str]
+    commands.append(" ".join(cmd))
+    if not dry_run:
+        subprocess.run(cmd, check=True)
+
+    env_cmd1 = ["tmux", "set-environment", "-t", session_name, "CCTMUX_SESSION", session_name]
+    commands.append(" ".join(env_cmd1))
+    if not dry_run:
+        subprocess.run(env_cmd1, check=True)
+
+    env_cmd2 = ["tmux", "set-environment", "-t", session_name, "CCTMUX_PROJECT_DIR", dir_str]
+    commands.append(" ".join(env_cmd2))
+    if not dry_run:
+        subprocess.run(env_cmd2, check=True)
+
+    export_cmd = f"export CCTMUX_SESSION={session_name} CCTMUX_PROJECT_DIR={dir_str}"
+    export_keys = ["tmux", "send-keys", "-t", session_name, export_cmd, "Enter"]
+    commands.append(" ".join(export_keys))
+    if not dry_run:
+        subprocess.run(export_keys, check=True)
+
+    if resume_mode == "last":
+        codex_cmd = "codex resume --last"
+    elif resume_mode == "picker":
+        codex_cmd = "codex resume"
+    else:
+        codex_cmd = "codex"
+    if codex_args:
+        codex_cmd = f"{codex_cmd} {codex_args}"
+    send_cmd = ["tmux", "send-keys", "-t", session_name, codex_cmd, "Enter"]
+    commands.append(" ".join(send_cmd))
+    if not dry_run:
+        subprocess.run(send_cmd, check=True)
+
+    layout_commands = apply_layout(session_name, layout, dry_run, custom_layouts=custom_layouts)
+    commands.extend(layout_commands)
+
+    if status_bar:
+        status_commands = configure_status_bar(session_name, project_dir, dry_run)
+        commands.extend(status_commands)
+
+    attach_cmd = ["tmux", "attach-session", "-t", session_name]
+    commands.append(" ".join(attach_cmd))
+    if not dry_run:
+        subprocess.run(attach_cmd, check=True)
+
+    return commands
+
+
+def create_gemini_session(
+    session_name: str,
+    project_dir: Path,
+    layout: LayoutType | str = LayoutType.DEFAULT,
+    status_bar: bool = False,
+    gemini_args: str | None = None,
+    custom_layouts: list[CustomLayout] | None = None,
+    dry_run: bool = False,
+) -> list[str]:
+    """Create a new tmux session and launch the gemini CLI.
+
+    Mirrors create_pi_session but runs `gemini` instead of `pi`. Resume and
+    yolo flags are appended to gemini_args by the caller (gemini's `--resume`
+    accepts `latest` or an index, and `--yolo` is a boolean).
+
+    Args:
+        session_name: The session name.
+        project_dir: The project directory.
+        layout: The layout to apply (built-in or custom name).
+        status_bar: Whether to enable status bar.
+        gemini_args: Additional arguments to pass to the gemini command.
+        custom_layouts: Optional list of custom layouts for name resolution.
+        dry_run: If True, return commands without executing.
+
+    Returns:
+        List of commands that were (or would be) executed.
+    """
+    commands: list[str] = []
+    dir_str = str(project_dir.resolve())
+
+    cmd = ["tmux", "new-session", "-d", "-s", session_name, "-c", dir_str]
+    commands.append(" ".join(cmd))
+    if not dry_run:
+        subprocess.run(cmd, check=True)
+
+    env_cmd1 = ["tmux", "set-environment", "-t", session_name, "CCTMUX_SESSION", session_name]
+    commands.append(" ".join(env_cmd1))
+    if not dry_run:
+        subprocess.run(env_cmd1, check=True)
+
+    env_cmd2 = ["tmux", "set-environment", "-t", session_name, "CCTMUX_PROJECT_DIR", dir_str]
+    commands.append(" ".join(env_cmd2))
+    if not dry_run:
+        subprocess.run(env_cmd2, check=True)
+
+    export_cmd = f"export CCTMUX_SESSION={session_name} CCTMUX_PROJECT_DIR={dir_str}"
+    export_keys = ["tmux", "send-keys", "-t", session_name, export_cmd, "Enter"]
+    commands.append(" ".join(export_keys))
+    if not dry_run:
+        subprocess.run(export_keys, check=True)
+
+    gemini_cmd = "gemini"
+    if gemini_args:
+        gemini_cmd = f"gemini {gemini_args}"
+    send_cmd = ["tmux", "send-keys", "-t", session_name, gemini_cmd, "Enter"]
+    commands.append(" ".join(send_cmd))
+    if not dry_run:
+        subprocess.run(send_cmd, check=True)
+
+    layout_commands = apply_layout(session_name, layout, dry_run, custom_layouts=custom_layouts)
+    commands.extend(layout_commands)
+
+    if status_bar:
+        status_commands = configure_status_bar(session_name, project_dir, dry_run)
+        commands.extend(status_commands)
+
+    attach_cmd = ["tmux", "attach-session", "-t", session_name]
+    commands.append(" ".join(attach_cmd))
+    if not dry_run:
+        subprocess.run(attach_cmd, check=True)
+
+    return commands
+
+
 def _build_claude_cmd(
     agent: TeamAgent,
     n_agents: int,

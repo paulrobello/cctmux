@@ -42,6 +42,8 @@ Launch Claude Code inside tmux with session management, real-time monitoring, an
 - **Status Bar**: Optional tmux status bar showing git branch and project info
 - **Claude Skill**: Enables Claude to manage tmux panes for dev servers, watchers, etc.
 - **pitmux**: Launch the `pi` coding agent in tmux sessions with the same layout/config support
+- **cdxtmux**: Launch the `codex` CLI in tmux sessions, with codex `resume` subcommand support and yolo mode
+- **gemtmux**: Launch the `gemini` CLI in tmux sessions, with `--resume latest` and `--yolo` support
 - **Dry Run Mode**: Preview tmux commands without executing
 
 ```mermaid
@@ -49,6 +51,8 @@ graph TB
     subgraph "cctmux CLI Tools"
         Main[cctmux]
         Pitmux[pitmux]
+        Cdxtmux[cdxtmux]
+        Gemtmux[gemtmux]
         Tasks[cctmux-tasks]
         Session[cctmux-session]
         Agents[cctmux-agents]
@@ -156,12 +160,15 @@ cctmux -l ralph
 
 ## CLI Tools
 
-cctmux provides seven CLI commands for Claude Code, plus `pitmux` for the pi coding agent:
+cctmux provides seven CLI commands for Claude Code, plus `pitmux` for the pi
+coding agent, `cdxtmux` for the codex CLI, and `gemtmux` for the gemini CLI:
 
 | Command | Purpose |
 |---------|---------|
 | `cctmux` | Launch Claude Code in a tmux session |
 | `pitmux` | Launch the pi coding agent in a tmux session |
+| `cdxtmux` | Launch the codex CLI in a tmux session |
+| `gemtmux` | Launch the gemini CLI in a tmux session |
 | `cctmux-tasks` | Monitor Claude Code tasks in real-time |
 | `cctmux-session` | Monitor session events and statistics |
 | `cctmux-agents` | Monitor subagent activity |
@@ -218,11 +225,54 @@ pitmux install-skill            # Install the pi-tmux skill
 pitmux init-config              # Create default configuration file
 ```
 
-If no `pitmux` session exists for the project but a `cctmux` session does
-(or vice versa), the launcher prompts to attach to the existing session
-instead of creating a new one.
+If no `pitmux` session exists for the project but a sibling `cctmux`,
+`cdxtmux`, or `gemtmux` session does (and vice versa for the other tools),
+the launcher prompts to attach to the existing session instead of creating
+a new one.
 
 See [CLI Reference](docs/CLI_REFERENCE.md#pitmux) for the full options table.
+
+### cdxtmux
+
+Launch the codex CLI in a tmux session. Mirrors `cctmux`'s core flags
+(layout, status-bar, dry-run, `-c`/`-r`/`-y`, config) and uses a configurable
+session prefix (`cdx-` by default) so all three launchers can run simultaneously
+for the same project. `--continue` and `--resume` insert codex's `resume`
+subcommand (`codex resume --last` or `codex resume`).
+
+```bash
+cdxtmux                              # Launch codex for the current project
+cdxtmux -c                           # Continue the most recent codex session
+cdxtmux -r                           # Pick a codex session to resume
+cdxtmux -y                           # Skip approvals + sandbox
+cdxtmux --codex-args "--model gpt-5" # Pass arguments to codex
+cdxtmux -l editor                    # Use the editor layout
+cdxtmux --dry-run                    # Preview commands
+cdxtmux init-config                  # Create default configuration file
+```
+
+See [CLI Reference](docs/CLI_REFERENCE.md#cdxtmux) for the full options table.
+
+### gemtmux
+
+Launch the gemini CLI in a tmux session. Mirrors `cctmux`'s core flags
+(layout, status-bar, dry-run, `-c`/`-r`/`-y`, config) and uses a configurable
+session prefix (`gem-` by default) so all four launchers can run simultaneously
+for the same project. Both `-c` and `-r` map to gemini's `--resume latest` since
+gemini lacks a separate interactive picker.
+
+```bash
+gemtmux                                  # Launch gemini for the current project
+gemtmux -c                               # Continue the most recent gemini session
+gemtmux -y                               # Yolo mode (auto-accept all actions)
+gemtmux --gemini-args "--model gemini-2.5-pro"  # Pass arguments to gemini
+gemtmux --gemini-args "--resume 5"       # Resume a specific indexed session
+gemtmux -l editor                        # Use the editor layout
+gemtmux --dry-run                        # Preview commands
+gemtmux init-config                      # Create default configuration file
+```
+
+See [CLI Reference](docs/CLI_REFERENCE.md#gemtmux) for the full options table.
 
 ## Layouts
 | Layout | Description |

@@ -219,6 +219,14 @@ class Config(BaseModel):
     default_pi_args: str | None = None
     pi_session_prefix: str = "pi-"
 
+    # cdxtmux (launches the `codex` CLI in a tmux session)
+    default_codex_args: str | None = None
+    codex_session_prefix: str = "cdx-"
+
+    # gemtmux (launches the `gemini` CLI in a tmux session)
+    default_gemini_args: str | None = None
+    gemini_session_prefix: str = "gem-"
+
     # When true in a project config, ignore all parent configs (user config)
     ignore_parent_configs: bool = False
 

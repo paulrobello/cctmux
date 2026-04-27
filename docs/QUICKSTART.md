@@ -96,9 +96,11 @@ cctmux
 # Output: Attaching to existing session: my-project
 ```
 
-If no `cctmux` session exists but a matching `pitmux` session (`pi-my-project`)
-does, cctmux prompts to attach to it instead. `pitmux` does the reverse for
-`cctmux` sessions.
+If no session exists for the launching tool but a sibling tool's session does
+(e.g. running `cctmux` in a project where only `pi-my-project`,
+`cdx-my-project`, or `gem-my-project` exists), the launcher prompts to attach
+to the existing session instead. The check is symmetric across `cctmux`,
+`pitmux`, `cdxtmux`, and `gemtmux`.
 
 ### Select from Recent Sessions
 

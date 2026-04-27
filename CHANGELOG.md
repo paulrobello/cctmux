@@ -4,6 +4,16 @@ All notable changes to cctmux will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0] - 2026-04-27
+
+### Added
+
+- **`cdxtmux` command** — new CLI entry point that launches the `codex` CLI inside tmux sessions, mirroring `cctmux`/`pitmux` UX. Supports `--continue` / `--resume` mapped to codex's `resume` subcommand (`codex resume --last` and `codex resume`), plus `--yolo` for `--dangerously-bypass-approvals-and-sandbox`.
+- **`gemtmux` command** — new CLI entry point that launches the `gemini` CLI inside tmux sessions, mirroring the other launchers. Supports `--continue` / `--resume` (both map to `gemini --resume latest` since gemini lacks an interactive picker) and `--yolo`.
+- **`default_codex_args`, `codex_session_prefix`, `default_gemini_args`, and `gemini_session_prefix` config fields** added to the Config model (default prefixes `cdx-` and `gem-`).
+- **`create_codex_session()` and `create_gemini_session()`** in `tmux_manager.py` — create tmux sessions that launch `codex` or `gemini` instead of `claude`/`pi`. Codex's `resume_mode` parameter handles its `resume` subcommand.
+- **Cross-tool resume now covers all four launchers** — `cctmux`, `pitmux`, `cdxtmux`, and `gemtmux` each prompt to attach to a sibling tool's session if one exists for the current project but their own does not.
+
 ## [0.4.1] - 2026-04-27
 
 ### Added

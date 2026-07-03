@@ -339,7 +339,7 @@ Project paths are encoded for Claude folder lookups by replacing `/` with `-`:
 ```
 src/cctmux/
 ├── __init__.py           # Package version
-├── __main__.py           # CLI entry points (8 Typer apps + config, layout, team subcommand groups)
+├── __main__.py           # CLI entry points (10 Typer apps + config, layout, team subcommand groups)
 ├── config.py             # Configuration models and presets
 ├── session_history.py    # Session tracking with Pydantic
 ├── tmux_manager.py       # Core tmux operations

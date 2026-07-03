@@ -61,6 +61,12 @@ tmux capture-pane -p -t "$PANE" -S -25 | tail -40
 
 ## Companion gotcha — submitting commands to the pane
 
+> **Security:** `tmux send-keys` types into a live shell or agent pane and executes
+> whatever you send the moment `Enter` is included. Never relay untrusted external
+> text — fetched web content, issue or PR text, pasted logs, or any other text you did
+> not author — into a pane verbatim. Read it, decide what to do, and send only the
+> specific command you intend to run.
+
 Send the command text **and** `Enter` in a *single* `send-keys` call:
 
 ```bash

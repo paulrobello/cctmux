@@ -644,6 +644,7 @@ Inside a cctmux or pitmux session:
 | `CCTMUX_PROJECT_DIR` | The project directory path |
 | `CLAUDE_CODE_TASK_LIST_ID` | Session name (if `--task-list-id` enabled, cctmux only) |
 | `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | Set to `1` (if `--agent-teams` enabled, cctmux only) |
+| `CC2CC_SESSION_ID` | Unique ID per pane in team mode, so each agent gets its own cc2cc session file (`cctmux team` only) |
 
 ## Requirements
 
@@ -678,7 +679,7 @@ Full documentation is available in the `docs/` directory:
 
 - [Quick Start Guide](docs/QUICKSTART.md) - Get started in minutes
 - [Architecture](docs/ARCHITECTURE.md) - System design and data flow
-- [CLI Reference](docs/CLI_REFERENCE.md) - Complete reference for all eight entry points
+- [CLI Reference](docs/CLI_REFERENCE.md) - Complete reference for all ten entry points
 - [Layouts Reference](docs/LAYOUTS.md) - All ten predefined layouts with diagrams
 - [Skill Guide](docs/SKILL_GUIDE.md) - Using the cc-tmux skill with Claude
 - [Configuration](docs/CONFIGURATION.md) - Configuration options and presets

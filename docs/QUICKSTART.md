@@ -11,6 +11,7 @@ Get started with cctmux in minutes. This guide covers installation, basic usage,
 - [Ralph Loop](#ralph-loop)
 - [Layouts](#layouts)
 - [pitmux (pi Agent)](#pitmux-pi-agent)
+- [cdxtmux and gemtmux (Codex and Gemini)](#cdxtmux-and-gemtmux-codex-and-gemini)
 - [Team Mode Quick Start](#team-mode-quick-start)
 - [Next Steps](#next-steps)
 
@@ -411,6 +412,54 @@ pi_session_prefix: "pi-"
 ```
 
 > **Note:** Each `pitmux` run auto-installs the bundled `pi-tmux` skill to `~/.pi/agent/skills/`, enabling the pi agent to manage tmux panes.
+
+## cdxtmux and gemtmux (Codex and Gemini)
+
+Launch the codex or gemini CLI inside tmux with the same session management as `cctmux`.
+
+### Start a Session
+
+```bash
+cd ~/my-project
+cdxtmux    # or: gemtmux
+```
+
+`cdxtmux` creates a session with a `cdx-` prefix (e.g., `cdx-my-project`); `gemtmux` uses a `gem-` prefix (e.g., `gem-my-project`). The prefixes avoid collisions with `cctmux` and `pitmux` sessions for the same project.
+
+### Common Options
+
+```bash
+cdxtmux --dry-run                                # Preview commands without executing
+cdxtmux -c                                        # Continue the most recent codex session
+cdxtmux -r                                        # Resume a session via the codex picker
+cdxtmux -l editor                                 # Use the editor layout
+cdxtmux --codex-args "--model gpt-5"              # Pass arguments to codex
+
+gemtmux --dry-run                                 # Preview commands without executing
+gemtmux -c                                        # Continue the most recent gemini session
+gemtmux -r                                        # Resume the most recent gemini session
+gemtmux -l editor                                 # Use the editor layout
+gemtmux --gemini-args "--model gemini-2.5-pro"    # Pass arguments to gemini
+```
+
+### Configure
+
+Create a default configuration file:
+
+```bash
+cdxtmux init-config    # or: gemtmux init-config
+```
+
+Set defaults in `~/.config/cctmux/config.yaml` or `.cctmux.yaml`:
+
+```yaml
+default_codex_args: "--model gpt-5"
+codex_session_prefix: "cdx-"
+default_gemini_args: "--model gemini-2.5-pro"
+gemini_session_prefix: "gem-"
+```
+
+> **Note:** Neither `cdxtmux` nor `gemtmux` bundles a Claude-style skill, so there is no `install-skill` subcommand for either tool.
 
 ## Team Mode Quick Start
 

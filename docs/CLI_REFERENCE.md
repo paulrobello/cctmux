@@ -82,7 +82,7 @@ cctmux [OPTIONS] [COMMAND]
 | `full-monitor` | Claude + session + tasks + activity |
 | `dashboard` | Large activity dashboard with session sidebar |
 | `ralph` | Shell + ralph monitor side-by-side (60/40) |
-| `ralph-full` | Shell + ralph monitor + task monitor |
+| `ralph-full` | Claude + ralph monitor + git monitor + task monitor (2x2 grid) |
 | `git-mon` | Claude (60%) + git status monitor (40%) |
 
 In addition to the predefined layouts, Claude can save and recall custom pane arrangements stored in the config file. See [Saved Layouts](LAYOUTS.md#saved-layouts) for details.
@@ -987,7 +987,7 @@ cctmux team [TEAM_FILE] [OPTIONS]
 
 Creates a tmux session with one pane per agent defined in the team config. Each pane runs Claude Code with:
 - A unique `CC2CC_SESSION_ID` to avoid session file races
-- `--append-system-prompt` with the agent's role prompt
+- `--append-system-prompt-file` with the agent's role prompt
 - `--name` set to the agent's role
 - Shared `CLAUDE_CODE_TASK_LIST_ID` when `shared_task_list` is enabled
 

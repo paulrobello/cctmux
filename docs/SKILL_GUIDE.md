@@ -67,7 +67,7 @@ Install the skill to your Claude skills directory using the `install-skill` subc
 cctmux install-skill
 ```
 
-This copies the skill files from the package's `skill/cc-tmux/` directory to `~/.claude/skills/cc-tmux/`.
+`cctmux install-skill` installs all bundled skills — `cc-tmux` and `cc-team-lead` — from the package's `src/cctmux/skill/` directory to `~/.claude/skills/`, copying each skill's files (for example `src/cctmux/skill/cc-tmux/` to `~/.claude/skills/cc-tmux/`).
 
 Verify installation:
 
@@ -409,7 +409,7 @@ Session names are sanitized from the project folder name: converted to lowercase
 
 ## Monitors
 
-cctmux includes eight CLI entry points, five of which are dedicated real-time monitors:
+cctmux includes ten CLI entry points, five of which are dedicated real-time monitors:
 
 | Monitor | Description |
 |---------|-------------|
@@ -445,7 +445,7 @@ Custom layouts are stored in the config file under `custom_layouts` and can be u
 
 ## Team Mode
 
-The `cctmux team` subcommand launches multiple Claude Code instances as a coordinated team in a single tmux session. Each agent gets a unique `CC2CC_SESSION_ID` for cc2cc session isolation and can be assigned a specific role via `--append-system-prompt`.
+The `cctmux team` subcommand launches multiple Claude Code instances as a coordinated team in a single tmux session. Each agent gets a unique `CC2CC_SESSION_ID` for cc2cc session isolation and can be assigned a specific role via `--append-system-prompt-file`.
 
 Team configuration is loaded from a standalone YAML file or the `team:` key in `.cctmux.yaml`. See [CC2CC Team Guide](CC2CC_TEAM.md) for the full team mode documentation.
 
@@ -519,7 +519,7 @@ Commands going to the wrong pane, or commands appearing in the Claude input.
 ## Related Documentation
 
 - [Layouts Reference](LAYOUTS.md) - Predefined layout options and diagrams
-- [CLI Reference](CLI_REFERENCE.md) - Complete command documentation for all eight entry points
+- [CLI Reference](CLI_REFERENCE.md) - Complete command documentation for all ten entry points
 - [Configuration](CONFIGURATION.md) - Configuration file options and presets
 - [Quick Start](QUICKSTART.md) - Getting started guide
 - [Architecture](ARCHITECTURE.md) - System architecture overview

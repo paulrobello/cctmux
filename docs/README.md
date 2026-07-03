@@ -20,6 +20,7 @@ cctmux provides a seamless integration between Claude Code and tmux, enabling:
 - **Team Mode**: Launch multiple Claude Code instances as a coordinated team with role-specific prompts and cc2cc communication
 - **Ralph Loop Automation**: Automated iterative Claude Code execution with task tracking, cost monitoring, and completion detection
 - **pi Agent Integration**: Launch the pi coding agent inside tmux via the `pitmux` entry point, with its own skill sync and session prefix
+- **Cross-Tool Launchers**: Launch the codex and gemini CLIs inside tmux via the `cdxtmux` and `gemtmux` entry points, with session prefixes and cross-tool resume prompts
 
 ```mermaid
 graph TB
@@ -33,6 +34,8 @@ graph TB
         GitMon[cctmux-git]
         Ralph[cctmux-ralph]
         Pitmux[pitmux]
+        Cdxtmux[cdxtmux]
+        Gemtmux[gemtmux]
     end
 
     subgraph "Tmux Integration"
@@ -58,6 +61,8 @@ graph TB
     Team --> TmuxSession
     Team --> CC2CC
     Pitmux --> TmuxSession
+    Cdxtmux --> TmuxSession
+    Gemtmux --> TmuxSession
     TmuxSession --> Panes
     TmuxSession --> StatusBar
     Panes --> Claude
@@ -79,6 +84,8 @@ graph TB
     style GitMon fill:#004d40,stroke:#00897b,stroke-width:2px,color:#ffffff
     style Ralph fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
     style Pitmux fill:#b71c1c,stroke:#f44336,stroke-width:2px,color:#ffffff
+    style Cdxtmux fill:#b71c1c,stroke:#f44336,stroke-width:2px,color:#ffffff
+    style Gemtmux fill:#b71c1c,stroke:#f44336,stroke-width:2px,color:#ffffff
     style TmuxSession fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style Panes fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style StatusBar fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
@@ -133,6 +140,12 @@ graph TB
 | `cctmux-ralph cancel` | Cancel an active Ralph Loop immediately |
 | `cctmux-ralph status` | Show current Ralph Loop status (one-shot) |
 | `pitmux` | Launch the pi coding agent in a tmux session |
+| `pitmux install-skill` | Install the pi-tmux skill to `~/.pi/agent/skills/` |
+| `pitmux init-config` | Create default configuration file |
+| `cdxtmux` | Launch the codex CLI in a tmux session |
+| `cdxtmux init-config` | Create default configuration file |
+| `gemtmux` | Launch the gemini CLI in a tmux session |
+| `gemtmux init-config` | Create default configuration file |
 
 ### Common Operations
 
@@ -226,6 +239,27 @@ pitmux --recent
 
 # Dry-run to preview commands
 pitmux -n
+
+# Launch the codex CLI in a tmux session
+cdxtmux
+
+# Launch codex with a specific layout and extra arguments
+cdxtmux -l cc-mon --codex-args "--model gpt-5"
+
+# Resume a codex session via the picker
+cdxtmux --resume
+
+# Continue the most recent codex session
+cdxtmux --continue
+
+# Launch the gemini CLI in a tmux session
+gemtmux
+
+# Launch gemini with a specific layout and extra arguments
+gemtmux -l cc-mon --gemini-args "--model gemini-2.5-pro"
+
+# Resume the most recent gemini session
+gemtmux --resume
 ```
 
 ## Related Documentation

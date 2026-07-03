@@ -270,7 +270,7 @@ cctmux supports several predefined layouts via the `--layout` / `-l` option:
 | `full-monitor` | Claude + session + tasks + activity dashboard |
 | `dashboard` | Large activity dashboard with session sidebar |
 | `ralph` | Shell + ralph monitor side-by-side (60/40) |
-| `ralph-full` | Claude + git monitor + ralph monitor |
+| `ralph-full` | Claude + ralph monitor + git monitor + task monitor (2x2 grid) |
 | `git-mon` | Claude (60%) + git status monitor (40%) |
 
 ### CC-Mon Layout

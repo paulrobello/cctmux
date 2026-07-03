@@ -13,6 +13,9 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from cctmux.monitor_common import estimate_cost as _estimate_token_cost
+from cctmux.monitor_common import format_tokens
+
 
 def _empty_dict() -> dict[str, int]:
     return {}
@@ -149,41 +152,6 @@ class ActivityStats:
         }
 
 
-# Model pricing per 1M tokens
-MODEL_PRICING: dict[str, dict[str, float]] = {
-    "opus": {
-        "input": 15.00,
-        "output": 75.00,
-        "cache_read": 1.50,
-        "cache_write": 18.75,
-    },
-    "sonnet": {
-        "input": 3.00,
-        "output": 15.00,
-        "cache_read": 0.30,
-        "cache_write": 3.75,
-    },
-    "haiku": {
-        "input": 0.80,
-        "output": 4.00,
-        "cache_read": 0.08,
-        "cache_write": 1.00,
-    },
-}
-
-
-def _get_model_tier(model: str) -> str:
-    """Determine pricing tier from model name."""
-    model_lower = model.lower()
-    if "opus" in model_lower:
-        return "opus"
-    if "sonnet" in model_lower:
-        return "sonnet"
-    if "haiku" in model_lower:
-        return "haiku"
-    return "opus"  # Default to opus for unknown
-
-
 def estimate_cost(model_usage: ModelUsage) -> float:
     """Estimate cost based on token usage.
 
@@ -193,18 +161,13 @@ def estimate_cost(model_usage: ModelUsage) -> float:
     Returns:
         Estimated cost in USD.
     """
-    tier = _get_model_tier(model_usage.model_name)
-    if tier not in MODEL_PRICING:
-        return 0.0
-
-    pricing = MODEL_PRICING[tier]
-    cost = (
-        (model_usage.input_tokens / 1_000_000) * pricing["input"]
-        + (model_usage.output_tokens / 1_000_000) * pricing["output"]
-        + (model_usage.cache_read_tokens / 1_000_000) * pricing["cache_read"]
-        + (model_usage.cache_creation_tokens / 1_000_000) * pricing["cache_write"]
+    return _estimate_token_cost(
+        model_usage.model_name,
+        model_usage.input_tokens,
+        model_usage.output_tokens,
+        model_usage.cache_read_tokens,
+        model_usage.cache_creation_tokens,
     )
-    return round(cost, 2)
 
 
 def load_stats_cache() -> ActivityStats | None:
@@ -254,17 +217,6 @@ def load_stats_cache() -> ActivityStats | None:
         hour_counts=hour_counts,
         longest_session=dict(data.get("longestSession", {})),
     )
-
-
-def _format_tokens(count: int) -> str:
-    """Format token count for display."""
-    if count >= 1_000_000_000:
-        return f"{count / 1_000_000_000:.1f}B"
-    if count >= 1_000_000:
-        return f"{count / 1_000_000:.1f}M"
-    if count >= 1_000:
-        return f"{count / 1_000:.1f}K"
-    return str(count)
 
 
 def build_ascii_heatmap(stats: ActivityStats, days: int = 14) -> Text:
@@ -348,10 +300,10 @@ def build_model_usage_table(
     for _model_name, usage in display_models:
         row: list[str | Text] = [
             Text(usage.model_short, style="cyan"),
-            _format_tokens(usage.input_tokens),
-            _format_tokens(usage.output_tokens),
-            _format_tokens(usage.cache_read_tokens),
-            _format_tokens(usage.cache_creation_tokens),
+            format_tokens(usage.input_tokens),
+            format_tokens(usage.output_tokens),
+            format_tokens(usage.cache_read_tokens),
+            format_tokens(usage.cache_creation_tokens),
         ]
         if show_cost:
             cost = estimate_cost(usage)
@@ -437,7 +389,7 @@ def build_summary_panel(stats: ActivityStats, show_cost: bool = True) -> Panel:
 
     # Token totals
     text.append("Total Tokens: ", style="dim")
-    text.append(f"{_format_tokens(stats.total_tokens)}", style="bold")
+    text.append(f"{format_tokens(stats.total_tokens)}", style="bold")
 
     # Cost estimates
     if show_cost:

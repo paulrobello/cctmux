@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -16,6 +15,8 @@ from rich.live import Live
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
+
+from cctmux.monitor_common import get_terminal_size
 
 
 def _empty_str_list() -> list[str]:
@@ -442,15 +443,6 @@ def calculate_task_window(
         total_count=total,
         active_index=active_in_window,
     )
-
-
-def get_terminal_size() -> tuple[int, int]:
-    """Get terminal width and height."""
-    try:
-        size = shutil.get_terminal_size()
-        return size.columns, size.lines
-    except (AttributeError, ValueError):
-        return 80, 24  # Fallback
 
 
 def get_visible_task_count(show_table: bool = True) -> int:

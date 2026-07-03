@@ -14,6 +14,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from cctmux.monitor_common import format_tokens as _format_tokens
 from cctmux.ralph_runner import (
     RalphState,
     RalphStatus,
@@ -51,22 +52,6 @@ class RalphMonitorConfig:
     show_prompt: bool = False
     show_task_progress: bool = True
     max_iterations_visible: int = 20
-
-
-def _format_tokens(count: int) -> str:
-    """Format token count for display.
-
-    Args:
-        count: Number of tokens.
-
-    Returns:
-        Formatted string like "1.2K" or "1.5M".
-    """
-    if count >= 1_000_000:
-        return f"{count / 1_000_000:.1f}M"
-    if count >= 1_000:
-        return f"{count / 1_000:.1f}K"
-    return str(count)
 
 
 def _format_duration(seconds: float) -> str:

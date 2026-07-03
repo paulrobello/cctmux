@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
-import shutil
 import subprocess
 import time
 from collections import Counter
@@ -21,8 +21,11 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from cctmux.monitor_common import format_tokens, parse_timestamp
 from cctmux.task_monitor import encode_project_path
 from cctmux.utils import compress_path, compress_paths_in_text
+
+logger = logging.getLogger(__name__)
 
 
 class AgentStatus(Enum):
@@ -200,13 +203,30 @@ def summarize_initial_prompt(prompt: str) -> str:
     return ""
 
 
-def _parse_timestamp(ts_str: str) -> datetime:
-    """Parse ISO timestamp string to datetime."""
+def _handle_summary_result(agent_id: str, fut: Future[str], summaries: dict[str, str]) -> bool:
+    """Extract a completed summary from its future and store it.
+
+    Isolated from ``_on_summary_done`` so the failure path (an unexpected
+    exception escaping ``summarize_initial_prompt``, e.g. a decode error
+    from the subprocess call) is independently testable.
+
+    Args:
+        agent_id: Identifier of the agent the summary belongs to.
+        fut: Completed future returned by ``summarize_initial_prompt``.
+        summaries: Summary cache to update in place on success.
+
+    Returns:
+        True if a new summary was stored and a redraw should be triggered.
+    """
     try:
-        ts_str = ts_str.replace("Z", "+00:00")
-        return datetime.fromisoformat(ts_str)
-    except (ValueError, AttributeError):
-        return datetime.min
+        result = fut.result()
+    except (OSError, UnicodeDecodeError) as exc:
+        logger.debug("Subagent summary generation failed for %s: %s", agent_id, exc)
+        return False
+    if result:
+        summaries[agent_id] = result
+        return True
+    return False
 
 
 def build_agent_name_map(
@@ -365,7 +385,7 @@ def parse_subagent_file(file_path: Path) -> Subagent | None:
                 if not session_id and data.get("sessionId"):
                     session_id = data["sessionId"]
 
-                timestamp = _parse_timestamp(data.get("timestamp", ""))
+                timestamp = parse_timestamp(data.get("timestamp", ""))
                 if timestamp != datetime.min:
                     if first_ts is None or timestamp < first_ts:
                         first_ts = timestamp
@@ -770,24 +790,6 @@ def resolve_subagent_path(
     return None, None, "No subagents found"
 
 
-def get_terminal_size() -> tuple[int, int]:
-    """Get terminal width and height."""
-    try:
-        size = shutil.get_terminal_size()
-        return size.columns, size.lines
-    except (AttributeError, ValueError):
-        return 80, 24
-
-
-def _format_tokens(count: int) -> str:
-    """Format token count for display."""
-    if count >= 1_000_000:
-        return f"{count / 1_000_000:.1f}M"
-    if count >= 1_000:
-        return f"{count / 1_000:.1f}K"
-    return str(count)
-
-
 def build_agent_table(
     agents: list[Subagent],
     max_agents: int = 20,
@@ -842,7 +844,7 @@ def build_agent_table(
             name = base_name
 
         # Token display
-        tokens = f"{_format_tokens(agent.input_tokens)}→{_format_tokens(agent.output_tokens)}"
+        tokens = f"{format_tokens(agent.input_tokens)}→{format_tokens(agent.output_tokens)}"
 
         # Top tools
         top_tools = agent.tool_counts.most_common(2)
@@ -919,7 +921,7 @@ def build_stats_panel(agents: list[Subagent], display_name: str) -> Panel:
     text.append(f"● {completed}", style="green")
 
     text.append("\nTokens: ", style="dim")
-    text.append(f"{_format_tokens(total_input)} in / {_format_tokens(total_output)} out  ", style="bold")
+    text.append(f"{format_tokens(total_input)} in / {format_tokens(total_output)} out  ", style="bold")
 
     if all_tools:
         text.append("Top Tools: ", style="dim")
@@ -1069,7 +1071,7 @@ def list_subagents(
         console.print(f"  {status_text} [cyan]{agent.display_name}[/] ({agent.agent_id})")
         console.print(f"      Model: {agent.model_short}  Duration: {agent.duration_display}")
         console.print(
-            f"      Tokens: {_format_tokens(agent.input_tokens)} in / {_format_tokens(agent.output_tokens)} out"
+            f"      Tokens: {format_tokens(agent.input_tokens)} in / {format_tokens(agent.output_tokens)} out"
         )
         if agent.tool_counts:
             top = agent.tool_counts.most_common(3)
@@ -1148,12 +1150,8 @@ def run_subagent_monitor(
         """Store completed summary and invalidate the data hash to trigger a redraw."""
         nonlocal last_data_hash
         try:
-            result = fut.result()
-            if result:
-                summaries[agent_id] = result
+            if _handle_summary_result(agent_id, fut, summaries):
                 last_data_hash = ""  # force redraw on next poll
-        except Exception:
-            pass
         finally:
             pending_summaries.discard(agent_id)
 

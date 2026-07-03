@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 import time
 from collections import Counter
 from dataclasses import dataclass, field
@@ -18,6 +17,7 @@ from rich.live import Live
 from rich.panel import Panel
 from rich.text import Text
 
+from cctmux.monitor_common import estimate_cost, format_tokens, get_terminal_size, parse_timestamp
 from cctmux.task_monitor import encode_project_path, find_project_sessions
 from cctmux.utils import compress_path, compress_paths_in_text
 
@@ -120,16 +120,6 @@ class SessionEvent:
         return labels.get(self.event_type, "UNKNOWN")
 
 
-def _parse_timestamp(ts_str: str) -> datetime:
-    """Parse ISO timestamp string to datetime."""
-    try:
-        # Handle Z suffix
-        ts_str = ts_str.replace("Z", "+00:00")
-        return datetime.fromisoformat(ts_str)
-    except (ValueError, AttributeError):
-        return datetime.min
-
-
 def _extract_text_from_content_list(content: list[dict[str, Any]]) -> str:
     """Extract text from a list of content items.
 
@@ -194,7 +184,7 @@ def parse_jsonl_line(
         return None
 
     msg_type = data.get("type", "")
-    timestamp = _parse_timestamp(data.get("timestamp", ""))
+    timestamp = parse_timestamp(data.get("timestamp", ""))
     session_id = data.get("sessionId", "")
     git_branch = data.get("gitBranch", "")
 
@@ -514,72 +504,6 @@ class SessionStats:
         return ", ".join(parts)
 
 
-# Model pricing per 1M tokens
-MODEL_PRICING: dict[str, dict[str, float]] = {
-    "opus": {
-        "input": 15.00,
-        "output": 75.00,
-        "cache_read": 1.50,
-        "cache_write": 18.75,
-    },
-    "sonnet": {
-        "input": 3.00,
-        "output": 15.00,
-        "cache_read": 0.30,
-        "cache_write": 3.75,
-    },
-    "haiku": {
-        "input": 0.80,
-        "output": 4.00,
-        "cache_read": 0.08,
-        "cache_write": 1.00,
-    },
-}
-
-
-def _get_model_tier(model: str) -> str:
-    """Determine pricing tier from model name."""
-    model_lower = model.lower()
-    if "opus" in model_lower:
-        return "opus"
-    if "sonnet" in model_lower:
-        return "sonnet"
-    if "haiku" in model_lower:
-        return "haiku"
-    return "opus"  # Default to opus for unknown
-
-
-def estimate_cost(
-    model: str,
-    input_tokens: int,
-    output_tokens: int,
-    cache_read_tokens: int,
-    cache_creation_tokens: int,
-) -> float:
-    """Estimate cost based on token usage.
-
-    Args:
-        model: Model name/ID.
-        input_tokens: Total input tokens.
-        output_tokens: Total output tokens.
-        cache_read_tokens: Cache read tokens.
-        cache_creation_tokens: Cache creation tokens.
-
-    Returns:
-        Estimated cost in USD.
-    """
-    tier = _get_model_tier(model)
-    pricing = MODEL_PRICING[tier]
-
-    cost = (
-        (input_tokens / 1_000_000) * pricing["input"]
-        + (output_tokens / 1_000_000) * pricing["output"]
-        + (cache_read_tokens / 1_000_000) * pricing["cache_read"]
-        + (cache_creation_tokens / 1_000_000) * pricing["cache_write"]
-    )
-    return round(cost, 2)
-
-
 def calculate_stats(events: list[SessionEvent]) -> SessionStats:
     """Calculate aggregated statistics from events.
 
@@ -808,19 +732,6 @@ def resolve_session_path(
     return None, "No session files found"
 
 
-def get_terminal_size() -> tuple[int, int]:
-    """Get terminal width and height.
-
-    Returns:
-        Tuple of (columns, lines).
-    """
-    try:
-        size = shutil.get_terminal_size()
-        return size.columns, size.lines
-    except (AttributeError, ValueError):
-        return 80, 24
-
-
 def get_visible_event_count() -> int:
     """Calculate how many events can fit in terminal.
 
@@ -901,22 +812,6 @@ def calculate_event_window(
     )
 
 
-def _format_tokens(count: int) -> str:
-    """Format token count for display.
-
-    Args:
-        count: Number of tokens.
-
-    Returns:
-        Formatted string like "1.2K" or "1.5M".
-    """
-    if count >= 1_000_000:
-        return f"{count / 1_000_000:.1f}M"
-    if count >= 1_000:
-        return f"{count / 1_000:.1f}K"
-    return str(count)
-
-
 def build_stats_panel(
     stats: SessionStats,
     show_stop_reasons: bool = True,
@@ -975,13 +870,13 @@ def build_stats_panel(
 
     # Line 3: Tokens and Cost
     text.append("\nTokens: ", style="dim")
-    input_display = _format_tokens(stats.total_input_tokens)
+    input_display = format_tokens(stats.total_input_tokens)
     if stats.total_cache_read_tokens > 0:
-        cache_display = _format_tokens(stats.total_cache_read_tokens)
+        cache_display = format_tokens(stats.total_cache_read_tokens)
         text.append(f"{input_display} in ({cache_display} cached) / ", style="bold")
     else:
         text.append(f"{input_display} in / ", style="bold")
-    text.append(f"{_format_tokens(stats.total_output_tokens)} out  ", style="bold")
+    text.append(f"{format_tokens(stats.total_output_tokens)} out  ", style="bold")
     text.append("Est. Cost: ", style="dim")
     text.append(f"${stats.estimated_cost:.2f}", style="bold yellow")
 

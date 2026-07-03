@@ -4,6 +4,22 @@ All notable changes to cctmux will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.0] - 2026-06-18
+
+### Added
+
+- **`driving-claude-panes.md` skill reference** — a hardened recipe for orchestrating a second Claude Code instance in another pane. Covers the idle-or-heartbeat background poller (detect the active-spinner signatures, infer idle from their absence, with a 5-minute heartbeat backstop), the single-call `send-keys "cmd" Enter` submission pattern (and why a separate `Enter` lands on autosuggestion ghost text and submits nothing), and how to answer a remote question menu via arrow keys + `capture-pane` verification. Linked from the cc-tmux `SKILL.md`.
+
+### Changed
+
+- **Single source of truth for bundled skills** — removed the duplicate top-level `skill/` tree that had to be hand-kept in sync with the packaged `src/cctmux/skill/`. The `make install-skill` target and sdist build now use the packaged copy directly, matching the runtime `_sync_skill()` and `cctmux install-skill` behavior. `make install-skill` now installs **all** bundled skills (`cc-tmux` and `cc-team-lead`), not just `cc-tmux`.
+- **`team.md` skill reference** clarified — the agent-pane prompt is the cc2cc channel-load prompt; documents that `cctmux team` auto-accepts the lead pane's prompt after a 3-second delay while the lead must send Enter to the remaining agent panes.
+- **Dependency upgrades** — `typer` 0.25.0 → 0.26.7, `pydantic` 2.13.3 → 2.13.4, `pytest` 9.0.3 → 9.1.0, `ruff` 0.15.12 → 0.15.18, `pyright` 1.1.409 → 1.1.410 (plus transitive bumps).
+
+### Fixed
+
+- **Replaced `os.system` editor launch with `subprocess.run`** in `layout create` / `layout edit` — uses `shlex.split` to preserve `$EDITOR`-with-args support (e.g. `code --wait`) and avoids shell interpolation. Also resolves the new `reportDeprecated` error from pyright 1.1.410.
+
 ## [0.5.1] - 2026-04-27
 
 ### Changed

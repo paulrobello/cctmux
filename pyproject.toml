@@ -35,11 +35,11 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "typer>=0.24.1",
+    "typer>=0.26.7",
     "rich>=15.0.0",
     "pyyaml>=6.0.3",
     "xdg-base-dirs>=6.0.2",
-    "pydantic>=2.10.0",
+    "pydantic>=2.13.4",
 ]
 
 [project.license]
@@ -65,9 +65,9 @@ gemtmux = "cctmux.__main__:gem_app"
 
 [dependency-groups]
 dev = [
-    "pytest>=9.0.3",
-    "ruff>=0.15.10",
-    "pyright>=1.1.408",
+    "pytest>=9.1.0",
+    "ruff>=0.15.18",
+    "pyright>=1.1.410",
     "pytest-cov>=7.1.0",
 ]
 
@@ -85,7 +85,6 @@ packages = [
 [tool.hatch.build.targets.sdist]
 include = [
     "src/cctmux",
-    "skill",
     "LICENSE",
     "README.md",
     "pyproject.toml",

@@ -27,9 +27,9 @@ install:
 	uv pip install -e .
 
 install-skill:
-	mkdir -p ~/.claude/skills/cc-tmux
-	cp -r skill/cc-tmux/* ~/.claude/skills/cc-tmux/
-	@echo "Skill installed to ~/.claude/skills/cc-tmux/"
+	mkdir -p ~/.claude/skills
+	cp -r src/cctmux/skill/* ~/.claude/skills/
+	@echo "Skills installed to ~/.claude/skills/"
 
 upgrade:
 	uv tool upgrade cctmux --reinstall

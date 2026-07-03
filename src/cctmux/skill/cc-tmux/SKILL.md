@@ -186,6 +186,10 @@ tmux send-keys -t "%16" C-c
 tmux send-keys -t "%16" "npm run dev" Enter
 ```
 
+### Driving Another Claude in a Pane
+
+When orchestrating a second Claude Code instance in another pane — driving it with `send-keys`, reading its state with `capture-pane` — knowing when it finishes a turn and submitting commands reliably both have gotchas. For the hardened idle-or-heartbeat poller, the single-call command-submission pattern (and why a separate `Enter` lands on autosuggestion ghost text), and how to answer a remote question menu, read `references/driving-claude-panes.md` in this skill's directory.
+
 ### Closing Panes
 
 ```bash

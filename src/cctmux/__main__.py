@@ -1465,6 +1465,8 @@ def layout_add(
 ) -> None:
     """Create a new custom layout."""
     import os
+    import shlex
+    import subprocess
     import tempfile
 
     import yaml
@@ -1529,7 +1531,7 @@ def layout_add(
         tmp_path = f.name
 
     try:
-        os.system(f'{editor} "{tmp_path}"')  # noqa: S605
+        subprocess.run([*shlex.split(editor), tmp_path], check=False)  # noqa: S603
 
         # Read back
         content = Path(tmp_path).read_text(encoding="utf-8")
@@ -1597,6 +1599,8 @@ def layout_edit(
 ) -> None:
     """Edit an existing custom layout."""
     import os
+    import shlex
+    import subprocess
     import tempfile
 
     import yaml
@@ -1627,7 +1631,7 @@ def layout_edit(
         tmp_path = f.name
 
     try:
-        os.system(f'{editor} "{tmp_path}"')  # noqa: S605
+        subprocess.run([*shlex.split(editor), tmp_path], check=False)  # noqa: S603
 
         content = Path(tmp_path).read_text(encoding="utf-8")
         stripped = "\n".join(line for line in content.splitlines() if not line.strip().startswith("#"))

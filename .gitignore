@@ -57,3 +57,4 @@ claude_scratch/
 .cctmux.yaml.local
 .claude/.cc2cc-session-id
 .claude/statusline-*
+.pi/extensions/discord-relay/

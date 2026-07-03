@@ -137,6 +137,16 @@ This loads the full skill documentation into Claude's context.
 | **Check state** | Verify before creating new panes |
 | **Return focus** | Always return to main pane |
 
+### Driving Another Claude
+
+| Capability | Description |
+|------------|-------------|
+| **Idle/heartbeat poll** | Detect when a Claude in another pane finishes a turn or stops to ask a question |
+| **Reliable submission** | Send command text and `Enter` in one `send-keys` call to avoid autosuggestion ghost text |
+| **Answer menus** | Move the `❯` selection with arrow keys, verify via `capture-pane`, then confirm |
+
+See `references/driving-claude-panes.md` in the skill directory for the full recipe.
+
 ## Common Workflows
 
 ### Web Development

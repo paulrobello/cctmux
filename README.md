@@ -586,6 +586,7 @@ Pane management — Claude can:
 - **Create Panes**: Split windows for dev servers, file watchers, test runners
 - **Manage Processes**: Start, stop, and restart background processes
 - **Navigate Panes**: Move focus between panes programmatically
+- **Drive Another Claude**: Orchestrate a second Claude Code instance in another pane — an idle-or-heartbeat poller to know when it finishes a turn, reliable command submission, and answering its question menus (see `references/driving-claude-panes.md`)
 
 ### cc-team-lead
 

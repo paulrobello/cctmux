@@ -8,16 +8,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **CLI tests for `cdxtmux` and `gemtmux`** — 22 CliRunner-based tests mirroring the pitmux suite (version, dry-run launch, tmux guard, resume/continue/yolo idioms, config merging, layout validation), plus 17 tests for the new shared `monitor_common` helpers.
 - **`driving-claude-panes.md` skill reference** — a hardened recipe for orchestrating a second Claude Code instance in another pane. Covers the idle-or-heartbeat background poller (detect the active-spinner signatures, infer idle from their absence, with a 5-minute heartbeat backstop), the single-call `send-keys "cmd" Enter` submission pattern (and why a separate `Enter` lands on autosuggestion ghost text and submits nothing), and how to answer a remote question menu via arrow keys + `capture-pane` verification. Linked from the cc-tmux `SKILL.md`.
 
 ### Changed
 
+- **Consolidated the four launcher callbacks** — `cctmux`/`pitmux`/`cdxtmux`/`gemtmux` now share a single `LauncherSpec`-driven `_run_launcher()` implementation instead of four ~220-line copy-pasted callbacks; per-tool differences (resume/continue/yolo flag shapes, skill sync, session prefixes) are encoded declaratively. Same consolidation applied to `create_*_session()` in `tmux_manager.py` via a shared `_create_tool_session()` pipeline. No behavior change; CLI options and emitted tmux commands are identical.
+- **Extracted `monitor_common.py`** — shared `format_tokens`, `get_terminal_size`, `parse_timestamp`, `MODEL_PRICING`, `get_model_tier`, and `estimate_cost` helpers previously duplicated (and drifted) across the monitor modules.
+- **tmux subprocess calls now have a 10s timeout** in `tmux_manager.py` (matching `layouts.py`), so a wedged tmux server can no longer hang the CLI indefinitely. `attach-session` is exempt since it owns the terminal for the session's lifetime.
+- **Skill references now warn against relaying untrusted text via `send-keys`** — `driving-claude-panes.md` and the `cc-team-lead` skill gained explicit security callouts for orchestrating agents.
 - **Single source of truth for bundled skills** — removed the duplicate top-level `skill/` tree that had to be hand-kept in sync with the packaged `src/cctmux/skill/`. The `make install-skill` target and sdist build now use the packaged copy directly, matching the runtime `_sync_skill()` and `cctmux install-skill` behavior. `make install-skill` now installs **all** bundled skills (`cc-tmux` and `cc-team-lead`), not just `cc-tmux`.
 - **`team.md` skill reference** clarified — the agent-pane prompt is the cc2cc channel-load prompt; documents that `cctmux team` auto-accepts the lead pane's prompt after a 3-second delay while the lead must send Enter to the remaining agent panes.
 - **Dependency upgrades** — `typer` 0.25.0 → 0.26.7, `pydantic` 2.13.3 → 2.13.4, `pytest` 9.0.3 → 9.1.0, `ruff` 0.15.12 → 0.15.18, `pyright` 1.1.409 → 1.1.410 (plus transitive bumps).
 
 ### Fixed
 
+- **Token counts over 1B now render correctly in all monitors** — the session, subagent, and ralph monitors displayed `1_500_000_000` as `1500.0M`; all monitors now share the billions-aware formatter (`1.5B`).
+- **Subagent monitor no longer silently swallows summary-generation failures** — errors in the background summary callback are narrowed and logged instead of `except Exception: pass`.
+- **`layout add`/`layout edit` no longer mask unexpected errors** — exception handling narrowed from an effective bare `except Exception` to `ValueError`/`ValidationError`, so real bugs propagate instead of being reported as "Invalid layout".
+- **Documentation drift** — `ralph-full` layout description (CLI reference and bundled skill), `--append-system-prompt-file` flag name, stale "eight entry points" counts, missing `cdxtmux`/`gemtmux` coverage in the docs index and quickstart, missing `CC2CC_SESSION_ID` in the README env table, and the bundled-skill source path in the skill guide.
 - **Replaced `os.system` editor launch with `subprocess.run`** in `layout create` / `layout edit` — uses `shlex.split` to preserve `$EDITOR`-with-args support (e.g. `code --wait`) and avoids shell interpolation. Also resolves the new `reportDeprecated` error from pyright 1.1.410.
 
 ## [0.5.1] - 2026-04-27

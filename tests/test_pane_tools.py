@@ -233,6 +233,22 @@ class TestPanesCommand:
         assert result.exit_code == 1
         assert "no such session" in result.output
 
+    def test_subcommand_skips_skill_sync(self) -> None:
+        """Inspection subcommands must not trigger skill auto-sync.
+
+        ``_sync_skill`` prints a one-line notice to stdout when it applies an
+        update; if it ran for ``panes``, that notice would prefix the ``--json``
+        output and break JSON consumers (agents parsing ``cctmux panes --json``).
+        This regressed on fresh installs where the skill was absent.
+        """
+        with (
+            patch("cctmux.pane_tools.subprocess.run", return_value=_completed(f"{_PANE_LINE}\n")),
+            patch("cctmux.__main__._sync_skill_dir") as mock_sync_dir,
+        ):
+            result = runner.invoke(app, ["panes", "--session", "mysession", "--json"])
+        assert result.exit_code == 0
+        mock_sync_dir.assert_not_called()
+
 
 class TestWaitIdleCommand:
     def test_idle_exit_zero(self) -> None:

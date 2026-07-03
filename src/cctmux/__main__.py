@@ -397,11 +397,11 @@ def _run_launcher(
             task_list_id/agent_teams, which have no equivalent in the other
             three tools.
     """
-    if spec.sync_skill is not None:
-        spec.sync_skill()
-
     if ctx.invoked_subcommand is not None:
         return
+
+    if spec.sync_skill is not None:
+        spec.sync_skill()
 
     ensure_directories()
 

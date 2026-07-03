@@ -583,10 +583,11 @@ Skills are also auto-synced on every `cctmux` invocation. The `pitmux` command a
 Pane management — Claude can:
 
 - **Discover Session Context**: Access `$CCTMUX_SESSION` and `$CCTMUX_PROJECT_DIR`
+- **Inspect Panes as JSON**: `cctmux panes --json` returns stable pane IDs, commands, and geometry — no tmux format-string parsing
 - **Create Panes**: Split windows for dev servers, file watchers, test runners
 - **Manage Processes**: Start, stop, and restart background processes
 - **Navigate Panes**: Move focus between panes programmatically
-- **Drive Another Claude**: Orchestrate a second Claude Code instance in another pane — an idle-or-heartbeat poller to know when it finishes a turn, reliable command submission, and answering its question menus (see `references/driving-claude-panes.md`)
+- **Drive Another Claude**: Orchestrate a second Claude Code instance in another pane — `cctmux wait-idle` blocks until the remote agent finishes a turn (idle-or-heartbeat), plus reliable command submission and answering its question menus (see `references/driving-claude-panes.md`)
 
 ### cc-team-lead
 

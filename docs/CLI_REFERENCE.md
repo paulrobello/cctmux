@@ -95,6 +95,8 @@ Custom layouts can also be defined in the config file or via `cctmux layout add`
 |---------|-------------|
 | `install-skill` | Install the cc-tmux skill to `~/.claude/skills/` |
 | `init-config` | Create default configuration file |
+| `panes` | List panes in a session (human table or `--json` for agents) |
+| `wait-idle <pane>` | Block until an agent pane goes idle or a heartbeat timeout fires |
 | `config validate` | Validate all config files and display warnings |
 | `config show` | Display effective merged configuration |
 | `layout list` | List all layouts (built-in and custom) |
@@ -165,6 +167,55 @@ cctmux -l my-layout
 
 # Strict mode (exit on config warnings)
 cctmux --strict
+```
+
+### Pane Inspection Subcommands
+
+Agent-facing commands for querying pane state and coordinating with other agent panes. Both support `--json` for machine-readable output.
+
+#### `cctmux panes`
+
+List all panes in a session with stable pane IDs, geometry, and running commands.
+
+| Option | Short | Description | Default |
+|--------|-------|-------------|---------|
+| `--session` | `-s` | Session to inspect | `$CCTMUX_SESSION`, else the attached session |
+| `--json` | | Emit a JSON array of pane objects | Rich table |
+
+Each JSON pane object contains `pane_id`, `index` (window.pane), `active`, `command`, `width`, `height`, `path`, and `title`. Target panes by `pane_id` (`%N`) — never by positional index.
+
+```bash
+# Human-readable table for the current session
+cctmux panes
+
+# Machine-readable, for agents
+cctmux panes --json
+
+# Inspect another session
+cctmux panes -s my-session --json
+```
+
+#### `cctmux wait-idle`
+
+Block until an agent pane goes idle (no active-spinner signatures for a sustained window) or a heartbeat timeout fires. Implements the idle-or-heartbeat recipe from the cc-tmux skill's `driving-claude-panes.md` reference.
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--timeout` | Heartbeat cap in seconds | `300` |
+| `--interval` | Seconds between capture-pane polls | `10` |
+| `--silence` | Seconds without busy signatures to declare idle | `60` |
+| `--lines` | Scrollback lines per capture | `25` |
+| `--pattern` | Override the busy-signature regex (for non-Claude spinners) | Claude Code spinners |
+| `--json` | Emit `{"state", "elapsed", "tail"}` JSON | Text with capture tail |
+
+Exit codes: `0` = idle/waiting, `2` = heartbeat timeout (still working), `1` = error (e.g. pane not found).
+
+```bash
+# Wait for the Claude in pane %15 to finish its turn
+cctmux wait-idle %15 --json
+
+# Faster polling with a shorter heartbeat
+cctmux wait-idle %15 --timeout 120 --interval 5 --silence 30
 ```
 
 ### Session Control Flags

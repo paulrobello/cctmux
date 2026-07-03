@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **`cctmux panes` subcommand** — list a session's panes with stable pane IDs, geometry, running command, path, and title; `--json` emits a machine-readable array so orchestrating agents no longer parse ad-hoc `tmux list-panes` output.
+- **`cctmux wait-idle <pane>` subcommand** — block until an agent pane goes idle or a heartbeat timeout fires, packaging the idle-or-heartbeat recipe from `driving-claude-panes.md` (`--timeout`/`--interval`/`--silence`/`--lines`/`--pattern`, `--json`, exit 0 = idle, 2 = heartbeat). The busy-signature pattern also now matches minute-form timers like `(5m 22s`.
+- **GitHub Actions CI** — `.github/workflows/ci.yml` runs format check, lint, pyright strict, and the test suite on pushes and PRs to `main`.
 - **CLI tests for `cdxtmux` and `gemtmux`** — 22 CliRunner-based tests mirroring the pitmux suite (version, dry-run launch, tmux guard, resume/continue/yolo idioms, config merging, layout validation), plus 17 tests for the new shared `monitor_common` helpers.
 - **`driving-claude-panes.md` skill reference** — a hardened recipe for orchestrating a second Claude Code instance in another pane. Covers the idle-or-heartbeat background poller (detect the active-spinner signatures, infer idle from their absence, with a 5-minute heartbeat backstop), the single-call `send-keys "cmd" Enter` submission pattern (and why a separate `Enter` lands on autosuggestion ghost text and submits nothing), and how to answer a remote question menu via arrow keys + `capture-pane` verification. Linked from the cc-tmux `SKILL.md`.
 

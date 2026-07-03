@@ -47,7 +47,15 @@ fi
 
 **Both the window index AND pane indices are NOT always 0.** cctmux sessions may use window index 1 and pane indices starting at 1 or any other value. Hardcoding `:0.0` or `:0.1` will target the wrong pane or fail entirely.
 
-**Always discover actual values** before targeting panes:
+**Always discover actual values** before targeting panes. The easiest way is the
+built-in machine-readable listing — no format-string parsing:
+
+```bash
+# One-shot JSON: pane_id, index, active, command, size, path, title per pane
+cctmux panes --json
+```
+
+Raw tmux equivalents when you need specific format fields:
 
 ```bash
 # Get the window index (use this before any pane operations)
@@ -189,6 +197,16 @@ tmux send-keys -t "%16" "npm run dev" Enter
 ### Driving Another Claude in a Pane
 
 When orchestrating a second Claude Code instance in another pane — driving it with `send-keys`, reading its state with `capture-pane` — knowing when it finishes a turn and submitting commands reliably both have gotchas. For the hardened idle-or-heartbeat poller, the single-call command-submission pattern (and why a separate `Enter` lands on autosuggestion ghost text), and how to answer a remote question menu, read `references/driving-claude-panes.md` in this skill's directory.
+
+The idle-or-heartbeat poller is packaged as a built-in command — prefer it over hand-rolling the capture loop:
+
+```bash
+# Block until the pane's Claude goes idle (exit 0) or the 5-min heartbeat fires (exit 2)
+cctmux wait-idle %15 --json
+# Tune: --timeout 300 --interval 10 --silence 60 --lines 25; --pattern for non-Claude spinners
+```
+
+Run it in the background (`run_in_background: true`) so you are re-invoked when it exits, then read its JSON (`state`, `elapsed`, `tail`), handle the pane, and re-arm.
 
 ### Closing Panes
 
@@ -350,6 +368,8 @@ cctmux supports saving and recalling pane arrangements. For the full save/recall
 
 | Action | Command |
 |--------|---------|
+| List panes as JSON | `cctmux panes --json` |
+| Wait for a Claude pane to go idle | `cctmux wait-idle %N --json` (exit 0 idle, 2 heartbeat) |
 | List panes (with IDs) | `tmux list-panes -t "$CCTMUX_SESSION" -F "#{pane_id} #{pane_width}x#{pane_height} #{pane_current_command}"` |
 | Get main pane ID | `MAIN=$(tmux display-message -t "$CCTMUX_SESSION" -p "#{pane_id}")` |
 | Split + capture ID | `PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h [-p %])` |

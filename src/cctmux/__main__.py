@@ -1,5 +1,7 @@
 """CLI entry point for cctmux."""
 
+import json
+import subprocess
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -25,6 +27,12 @@ from cctmux.config import (
     validate_layout_name,
 )
 from cctmux.git_monitor import run_git_monitor
+from cctmux.pane_tools import (
+    DEFAULT_BUSY_PATTERN,
+    list_panes,
+    panes_to_json,
+    wait_for_idle,
+)
 from cctmux.session_history import (
     add_or_update_entry,
     get_entry_by_name,
@@ -694,6 +702,134 @@ def init_config() -> None:
     config = Config()
     save_config(config)
     console.print(f"[green]✓[/] Created config file: {config_file}")
+
+
+def _resolve_panes_session(session: str | None) -> str:
+    """Resolve the target session for pane inspection.
+
+    Order: explicit --session, $CCTMUX_SESSION, then the attached tmux session.
+
+    Args:
+        session: Explicit session name from the CLI, if any.
+
+    Returns:
+        The session name to inspect.
+
+    Raises:
+        typer.Exit: If no session can be determined.
+    """
+    import os
+
+    if session:
+        return session
+    env_session = os.environ.get("CCTMUX_SESSION")
+    if env_session:
+        return env_session
+    if is_inside_tmux():
+        result = subprocess.run(
+            ["tmux", "display-message", "-p", "#S"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    err_console.print("[red]Error:[/] No session specified and not inside a cctmux/tmux session.")
+    err_console.print("Use --session NAME or run inside tmux.")
+    raise typer.Exit(1)
+
+
+@app.command()
+def panes(
+    session: Annotated[
+        str | None,
+        typer.Option("--session", "-s", help="Session to inspect (default: $CCTMUX_SESSION or current)."),
+    ] = None,
+    json_output: Annotated[bool, typer.Option("--json", help="Emit machine-readable JSON.")] = False,
+) -> None:
+    """List panes in a session with IDs, commands, and geometry.
+
+    Designed for agents: --json emits a stable array of pane objects so callers
+    don't parse ad-hoc tmux output. Target panes by pane_id (%N), never by index.
+    """
+    target = _resolve_panes_session(session)
+    try:
+        pane_list = list_panes(target)
+    except (RuntimeError, subprocess.TimeoutExpired) as e:
+        err_console.print(f"[red]Error:[/] {e}")
+        raise typer.Exit(1) from e
+
+    if json_output:
+        print(panes_to_json(pane_list))
+        return
+
+    from rich.table import Table
+
+    table = Table(title=f"Panes in session: {target}")
+    table.add_column("Pane ID", style="cyan")
+    table.add_column("Index")
+    table.add_column("Active")
+    table.add_column("Command", style="green")
+    table.add_column("Size")
+    table.add_column("Path", style="dim")
+    table.add_column("Title", style="dim")
+    for p in pane_list:
+        table.add_row(
+            p.pane_id,
+            p.index,
+            "●" if p.active else "",
+            p.command,
+            f"{p.width}x{p.height}",
+            p.path,
+            p.title,
+        )
+    console.print(table)
+
+
+@app.command("wait-idle")
+def wait_idle(
+    pane: Annotated[str, typer.Argument(help="Pane ID (%N) or tmux target to watch.")],
+    timeout: Annotated[float, typer.Option("--timeout", help="Heartbeat cap in seconds.")] = 300.0,
+    interval: Annotated[float, typer.Option("--interval", help="Seconds between polls.")] = 10.0,
+    silence: Annotated[
+        float, typer.Option("--silence", help="Seconds without busy signatures to declare idle.")
+    ] = 60.0,
+    lines: Annotated[int, typer.Option("--lines", help="Scrollback lines per capture.")] = 25,
+    pattern: Annotated[
+        str | None,
+        typer.Option("--pattern", help="Override busy-signature regex (default matches Claude Code spinners)."),
+    ] = None,
+    json_output: Annotated[bool, typer.Option("--json", help="Emit machine-readable JSON result.")] = False,
+) -> None:
+    """Block until an agent pane goes idle, or the heartbeat timeout fires.
+
+    Implements the idle-or-heartbeat recipe from the cc-tmux skill: polls
+    capture-pane for active-spinner signatures and treats sustained absence as
+    idle/waiting. Exit code 0 = idle, 2 = heartbeat timeout (still working).
+    """
+    try:
+        result = wait_for_idle(
+            pane,
+            timeout=timeout,
+            interval=interval,
+            silence=silence,
+            lines=lines,
+            pattern=pattern if pattern is not None else DEFAULT_BUSY_PATTERN,
+        )
+    except (RuntimeError, subprocess.TimeoutExpired) as e:
+        err_console.print(f"[red]Error:[/] {e}")
+        raise typer.Exit(1) from e
+
+    if json_output:
+        print(json.dumps({"state": result.state, "elapsed": result.elapsed, "tail": result.tail}, indent=2))
+    else:
+        reason = "IDLE/WAITING confirmed" if result.state == "idle" else "HEARTBEAT timeout (still working)"
+        console.print(f"=== REASON: {reason} after ~{int(result.elapsed)}s ===")
+        for line in result.tail[-40:]:
+            print(line)
+    if result.state == "timeout":
+        raise typer.Exit(2)
 
 
 tasks_app = typer.Typer(

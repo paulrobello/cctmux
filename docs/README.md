@@ -120,6 +120,8 @@ graph TB
 | `cctmux` | Launch Claude Code in a tmux session |
 | `cctmux install-skill` | Install the cc-tmux skill to `~/.claude/skills/` |
 | `cctmux init-config` | Create default configuration file |
+| `cctmux panes` | List panes in a session (`--json` for agents) |
+| `cctmux wait-idle <pane>` | Block until an agent pane goes idle |
 | `cctmux config validate` | Validate all config files and report warnings |
 | `cctmux config show` | Show effective merged configuration |
 | `cctmux layout list` | List all available layouts (built-in and custom) |

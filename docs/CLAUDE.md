@@ -35,6 +35,8 @@ Source modules in `src/cctmux/`:
 | `session_history.py` | Session tracking with Pydantic, YAML persistence |
 | `tmux_manager.py` | Session creation, attachment, environment setup, status bar |
 | `layouts.py` | Ten predefined layout implementations |
+| `monitor_common.py` | Shared monitor helpers: token formatting, timestamps, model pricing |
+| `pane_tools.py` | Agent-facing pane listing (JSON) and idle detection |
 | `task_monitor.py` | Parse task JSON, dependency graphs, Rich Live display |
 | `session_monitor.py` | Parse JSONL events, statistics, Rich Live display |
 | `subagent_monitor.py` | Discover and monitor subagent JSONL files |

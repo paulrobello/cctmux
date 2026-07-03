@@ -12,6 +12,18 @@ idle / starts waiting for input** OR after a **5-minute heartbeat** — whicheve
 first. Launch it detached (`run_in_background: true`) so the harness re-invokes you on
 exit; then read its output, handle the pane, and re-arm a fresh poller.
 
+**Prefer the built-in command** — it packages this exact recipe with the defaults below
+(300s heartbeat, 10s polls, 60s silence window, 25-line captures):
+
+```bash
+cctmux wait-idle %1 --json     # exit 0 = idle/waiting, exit 2 = heartbeat (still working)
+# JSON result: {"state": "idle"|"timeout", "elapsed": N, "tail": [last capture lines]}
+# --pattern overrides the busy-signature regex for tools with different spinners
+```
+
+The raw bash version follows, for non-cctmux environments or when you need to customize
+beyond what the flags allow:
+
 ```bash
 PANE=%1            # target pane ID — get it from:
                    # tmux list-panes -t "$CCTMUX_SESSION" -F "#{pane_id} #{pane_current_command}"

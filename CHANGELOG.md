@@ -4,6 +4,19 @@ All notable changes to cctmux will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.1] - 2026-11-17
+
+### Fixed
+
+- **Layouts no longer fail on tmux 3.4** — all 24 `split-window` calls (built-in layouts and custom layouts) passed `-p <N>`, which tmux 3.4 rejects with `size missing`, breaking every layout on that build. They now use `-l <N>%`, supported since tmux 3.1; the minimum tmux version is now documented as 3.1+ ([#5](https://github.com/paulrobello/cctmux/issues/5)).
+- **tmux errors now surface their stderr** — `_run_tmux` failures raised only `Command ... returned non-zero exit status N` while tmux's own error was swallowed by `capture_output`; the raised `RuntimeError` now includes tmux's stderr, which would have made the `-p` failure above obvious immediately.
+- **Bundled skill and docs taught the broken flag** — the cc-tmux skill (`SKILL.md` + saved-layouts/par-mode/monitors/ralph references) and the skill guide showed `split-window -p N` examples that fail on tmux 3.4; all updated to `-l N%`.
+
+### Changed
+
+- **CI restructured to job-per-concern** — the single `checkall` job became a scoped-dispatch resolver (`workflow_dispatch` `os-scope` input for single-OS verification runs), a lint job (format/lint/pyright once on ubuntu), and a test job carrying the OS matrix (ubuntu on PRs, ubuntu + macOS on pushes and `all` dispatches). Adds PR concurrency cancellation, `contents: read`, per-job timeouts, `fail-fast: false`, and SHA-pinned actions (`checkout` v7.0.1, `setup-uv` v10.3.3).
+- **Dependency upgrades** — `typer` 0.26.7 → 0.29.1, `pydantic` 2.13.4 → 2.14.3, `xdg-base-dirs` 6.0.2 → 6.1.0, `pytest` 9.1.0 → 9.2.0, `ruff` 0.15.18 → 0.17.5, `pyright` 1.1.410 → 1.1.414 (plus transitive bumps).
+
 ## [0.6.0] - 2026-06-18
 
 ### Added

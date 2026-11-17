@@ -650,7 +650,7 @@ Inside a cctmux or pitmux session:
 ## Requirements
 
 - **Python**: 3.13+
-- **tmux**: Terminal multiplexer
+- **tmux**: Terminal multiplexer, 3.1+
 - **Claude Code**: Claude Code CLI (`claude`)
 - **pi**: Optional, pi coding agent CLI (`pi`) — required for `pitmux`
 - **fzf**: Optional, for `--recent` session selection

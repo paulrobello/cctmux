@@ -118,11 +118,11 @@ To manually set up the ralph-full layout:
 MAIN_PANE=$(tmux display-message -t "$CCTMUX_SESSION" -p "#{pane_id}")
 
 # Split main pane horizontally 50/50 — right column for ralph
-RIGHT_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$MAIN_PANE" -h -p 50)
+RIGHT_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$MAIN_PANE" -h -l 50%)
 tmux send-keys -t "$RIGHT_PANE" "cctmux-ralph" Enter
 
 # Split main pane vertically — bottom-left ~88% for git monitor
-BOTTOM_LEFT=$(tmux split-window -d -P -F "#{pane_id}" -t "$MAIN_PANE" -v -p 88)
+BOTTOM_LEFT=$(tmux split-window -d -P -F "#{pane_id}" -t "$MAIN_PANE" -v -l 88%)
 tmux send-keys -t "$BOTTOM_LEFT" "cctmux-git" Enter
 ```
 

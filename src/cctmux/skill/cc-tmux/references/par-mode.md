@@ -64,13 +64,13 @@ fi
 
 # Create triple layout: main (50%) | right column split vertically (50%)
 # Split horizontally with 50% on the right, capture pane ID
-RIGHT_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -p 50)
+RIGHT_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -l 50%)
 
 # Launch stats-only task monitor in the right pane (compact single-line display)
 tmux send-keys -t "$RIGHT_PANE" "cctmux-tasks -s" Enter
 
 # Split right pane vertically — tasks stays on top (3 rows), git gets the rest
-BOTTOM_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$RIGHT_PANE" -v -p 93)
+BOTTOM_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$RIGHT_PANE" -v -l 93%)
 
 # Launch git monitor in the bottom-right pane
 tmux send-keys -t "$BOTTOM_PANE" "cctmux-git" Enter

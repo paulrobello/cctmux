@@ -72,7 +72,7 @@ tmux list-panes -t "$CCTMUX_SESSION" -F "#{pane_id} #{pane_current_command}"
 **When creating new panes**, always capture the pane ID with `-d -P -F "#{pane_id}"`:
 ```bash
 # -d = don't switch focus, -P -F = print the new pane's ID
-NEW_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -p 30)
+NEW_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -l 30%)
 tmux send-keys -t "$NEW_PANE" "npm run dev" Enter
 ```
 
@@ -128,7 +128,7 @@ This gives the user visibility into the current layout so they can instruct you 
 **Horizontal Split (side by side)**
 ```bash
 # Split with 30% width on the right
-tmux split-window -t "$CCTMUX_SESSION" -h -p 30
+tmux split-window -t "$CCTMUX_SESSION" -h -l 30%
 
 # Split with specific column width
 tmux split-window -t "$CCTMUX_SESSION" -h -l 80
@@ -137,7 +137,7 @@ tmux split-window -t "$CCTMUX_SESSION" -h -l 80
 **Vertical Split (stacked)**
 ```bash
 # Split with 20% height on the bottom
-tmux split-window -t "$CCTMUX_SESSION" -v -p 20
+tmux split-window -t "$CCTMUX_SESSION" -v -l 20%
 
 # Split with specific line count
 tmux split-window -t "$CCTMUX_SESSION" -v -l 10
@@ -149,7 +149,7 @@ After creating a pane, use send-keys to launch applications. **Always capture th
 
 ```bash
 # Create pane and capture its ID, then launch application
-NEW_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -p 30)
+NEW_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -l 30%)
 tmux send-keys -t "$NEW_PANE" "npm run dev" Enter
 ```
 
@@ -230,7 +230,7 @@ pane_count=$(tmux list-panes -t "$CCTMUX_SESSION" | wc -l)
 
 if [ "$pane_count" -eq 1 ]; then
     # Create pane for dev server, capture its ID
-    DEV_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -p 30)
+    DEV_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -l 30%)
     # Launch dev server
     tmux send-keys -t "$DEV_PANE" "npm run dev" Enter
 fi
@@ -252,7 +252,7 @@ Run tests in watch mode:
 
 ```bash
 # Create right pane for test output, capture its ID
-TEST_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -p 40)
+TEST_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -l 40%)
 tmux send-keys -t "$TEST_PANE" "npm test -- --watch" Enter
 ```
 
@@ -262,13 +262,13 @@ For complex setups with multiple background processes:
 
 ```bash
 # Create right column (50%), capture its ID
-RIGHT_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -p 50)
+RIGHT_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -l 50%)
 
 # Launch dev server in right pane
 tmux send-keys -t "$RIGHT_PANE" "npm run dev" Enter
 
 # Split right pane for tests (bottom half of right column), capture its ID
-BOTTOM_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$RIGHT_PANE" -v -p 50)
+BOTTOM_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$RIGHT_PANE" -v -l 50%)
 
 # Launch test watcher in new bottom-right pane
 tmux send-keys -t "$BOTTOM_PANE" "npm test -- --watch" Enter
@@ -364,7 +364,7 @@ cctmux supports saving and recalling pane arrangements. For the full save/recall
 ## Command Reference
 
 **First, discover pane IDs**: `tmux list-panes -t "$CCTMUX_SESSION" -F "#{pane_id} #{pane_current_command}"`
-**Create panes with ID capture**: `PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -p 30)`
+**Create panes with ID capture**: `PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -l 30%)`
 
 | Action | Command |
 |--------|---------|
@@ -372,7 +372,7 @@ cctmux supports saving and recalling pane arrangements. For the full save/recall
 | Wait for a Claude pane to go idle | `cctmux wait-idle %N --json` (exit 0 idle, 2 heartbeat) |
 | List panes (with IDs) | `tmux list-panes -t "$CCTMUX_SESSION" -F "#{pane_id} #{pane_width}x#{pane_height} #{pane_current_command}"` |
 | Get main pane ID | `MAIN=$(tmux display-message -t "$CCTMUX_SESSION" -p "#{pane_id}")` |
-| Split + capture ID | `PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h [-p %])` |
+| Split + capture ID | `PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h [-l %])` |
 | Select pane | `tmux select-pane -t "$PANE_ID"` |
 | Send keys | `tmux send-keys -t "$PANE_ID" "cmd" Enter` |
 | Send Ctrl+C | `tmux send-keys -t "$PANE_ID" C-c` |
@@ -394,7 +394,7 @@ tmux send-keys -t "$CCTMUX_SESSION:$W.1" "npm run dev" Enter
 ✅ Use captured pane IDs or discover actual IDs first
 ```bash
 # Good: capture ID when creating
-NEW_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -p 30)
+NEW_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -l 30%)
 tmux send-keys -t "$NEW_PANE" "npm run dev" Enter
 
 # Good: discover IDs for existing panes

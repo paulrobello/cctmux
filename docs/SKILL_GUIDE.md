@@ -318,7 +318,7 @@ This ensures:
 
 ```bash
 # Claude does this:
-NEW_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -p 30)
+NEW_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -l 30%)
 tmux send-keys -t "$NEW_PANE" "npm run dev" Enter
 
 # NOT this (anti-pattern):
@@ -331,7 +331,7 @@ Claude uses pane IDs (e.g., `%15`, `%16`) instead of positional indices, which a
 
 ```bash
 # Capture pane ID when creating
-NEW_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -p 30)
+NEW_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -l 30%)
 tmux send-keys -t "$NEW_PANE" "npm run dev" Enter
 
 # Discover existing pane IDs

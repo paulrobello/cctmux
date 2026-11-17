@@ -149,10 +149,10 @@ fi
 #   target=main  -> split from MAIN_PANE
 #   target=prev  -> split from the last created pane
 # Example for "dev-monitor":
-PANE1=$(tmux split-window -d -P -F "#{pane_id}" -t "$MAIN_PANE" -h -p 50)
+PANE1=$(tmux split-window -d -P -F "#{pane_id}" -t "$MAIN_PANE" -h -l 50%)
 tmux send-keys -t "$PANE1" "cctmux-tasks -g" Enter
 
-PANE2=$(tmux split-window -d -P -F "#{pane_id}" -t "$PANE1" -v -p 50)
+PANE2=$(tmux split-window -d -P -F "#{pane_id}" -t "$PANE1" -v -l 50%)
 tmux send-keys -t "$PANE2" "cctmux-git" Enter
 
 echo "Layout 'dev-monitor' activated"

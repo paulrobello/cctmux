@@ -74,7 +74,7 @@ Run the task monitor in a dedicated pane to watch task progress:
 
 ```bash
 # Create pane for task monitor, capture its ID
-TASK_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -p 35)
+TASK_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -l 35%)
 tmux send-keys -t "$TASK_PANE" "cctmux-tasks" Enter
 ```
 
@@ -224,7 +224,7 @@ Run the session monitor alongside your work:
 
 ```bash
 # Create pane for session monitor, capture its ID
-SESSION_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -p 40)
+SESSION_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -l 40%)
 tmux send-keys -t "$SESSION_PANE" "cctmux-session" Enter
 ```
 
@@ -332,11 +332,11 @@ Run the git monitor alongside your work:
 
 ```bash
 # Create pane for git monitor, capture its ID
-GIT_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -p 40)
+GIT_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -l 40%)
 tmux send-keys -t "$GIT_PANE" "cctmux-git" Enter
 
 # With remote tracking enabled
-GIT_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -p 40)
+GIT_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -l 40%)
 tmux send-keys -t "$GIT_PANE" "cctmux-git --fetch" Enter
 ```
 
@@ -391,7 +391,7 @@ Run the subagent monitor alongside your work:
 
 ```bash
 # Create pane for subagent monitor, capture its ID
-AGENT_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -p 45)
+AGENT_PANE=$(tmux split-window -d -P -F "#{pane_id}" -t "$CCTMUX_SESSION" -h -l 45%)
 tmux send-keys -t "$AGENT_PANE" "cctmux-agents" Enter
 ```
 

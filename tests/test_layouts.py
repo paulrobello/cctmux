@@ -134,7 +134,7 @@ class TestApplyEditorLayout:
         commands = apply_editor_layout("test-session", dry_run=True)
         assert len(commands) == 1
         # Horizontal split with -d to keep focus on original pane
-        assert commands[0] == "tmux split-window -d -t test-session -h -p 30"
+        assert commands[0] == "tmux split-window -d -t test-session -h -l 30%"
 
 
 class TestApplyMonitorLayout:
@@ -145,7 +145,7 @@ class TestApplyMonitorLayout:
         commands = apply_monitor_layout("test-session", dry_run=True)
         assert len(commands) == 1
         # Vertical split with -d to keep focus on original pane
-        assert commands[0] == "tmux split-window -d -t test-session -v -p 20"
+        assert commands[0] == "tmux split-window -d -t test-session -v -l 20%"
 
 
 class TestApplyTripleLayout:
@@ -158,10 +158,10 @@ class TestApplyTripleLayout:
         # First: horizontal split with -d -P to capture pane ID and keep focus
         assert "-d" in commands[0]
         assert "-P" in commands[0]
-        assert "-h -p 50" in commands[0]
+        assert "-h -l 50%" in commands[0]
         # Second: vertical split of the right pane (uses :0.1 in dry run)
         assert "-d" in commands[1]
-        assert "-v -p 50" in commands[1]
+        assert "-v -l 50%" in commands[1]
         assert "test-session:0.1" in commands[1]
 
 
@@ -174,12 +174,12 @@ class TestApplyCcMonLayout:
         assert len(commands) == 5
         # First: horizontal split 50% with -P to capture pane ID
         assert "-P" in commands[0]
-        assert "-h -p 50" in commands[0]
+        assert "-h -l 50%" in commands[0]
         # Second: launch cctmux-session in right pane
         assert "cctmux-session" in commands[1]
         assert "send-keys" in commands[1]
         # Third: vertical split of right pane
-        assert "-v -p 50" in commands[2]
+        assert "-v -l 50%" in commands[2]
         # Fourth: launch cctmux-tasks -g in bottom-right pane
         assert "cctmux-tasks -g" in commands[3]
         # Fifth: focus the main (left) pane
@@ -194,17 +194,17 @@ class TestApplyFullMonitorLayout:
         commands = apply_full_monitor_layout("test-session", dry_run=True)
         assert len(commands) == 7
         # 1: horizontal split with 40% right
-        assert "-h -p 40" in commands[0]
+        assert "-h -l 40%" in commands[0]
         assert "-P" in commands[0]
         # 2: cctmux-session in top-right
         assert "cctmux-session" in commands[1]
         assert "send-keys" in commands[1]
         # 3: vertical split of right pane (70%)
-        assert "-v -p 70" in commands[2]
+        assert "-v -l 70%" in commands[2]
         # 4: cctmux-tasks -g in middle-right
         assert "cctmux-tasks -g" in commands[3]
         # 5: vertical split of middle pane (50%)
-        assert "-v -p 50" in commands[4]
+        assert "-v -l 50%" in commands[4]
         # 6: cctmux-activity in bottom-right
         assert "cctmux-activity" in commands[5]
         # 7: focus main pane
@@ -224,12 +224,12 @@ class TestApplyDashboardLayout:
         commands = apply_dashboard_layout("test-session", dry_run=True)
         assert len(commands) == 5
         # 1: horizontal split with 30% right
-        assert "-h -p 30" in commands[0]
+        assert "-h -l 30%" in commands[0]
         assert "-P" in commands[0]
         # 2: cctmux-session in top-right
         assert "cctmux-session" in commands[1]
         # 3: vertical split of right pane (50%)
-        assert "-v -p 50" in commands[2]
+        assert "-v -l 50%" in commands[2]
         # 4: cctmux-activity in main (left) pane
         assert "cctmux-activity --show-hourly" in commands[3]
         assert "test-session:0.0" in commands[3]
@@ -246,7 +246,7 @@ class TestApplyRalphLayout:
         commands = apply_ralph_layout("test-session", dry_run=True)
         assert len(commands) == 3
         # 1: horizontal split with 40% right
-        assert "-h -p 40" in commands[0]
+        assert "-h -l 40%" in commands[0]
         assert "-P" in commands[0]
         # 2: cctmux-ralph in right pane
         assert "cctmux-ralph" in commands[1]
@@ -263,16 +263,16 @@ class TestApplyRalphFullLayout:
         commands = apply_ralph_full_layout("test-session", dry_run=True)
         assert len(commands) == 7
         # 1: horizontal split 50/50
-        assert "-h -p 50" in commands[0]
+        assert "-h -l 50%" in commands[0]
         assert "-P" in commands[0]
         # 2: cctmux-ralph in right pane
         assert "cctmux-ralph" in commands[1]
         # 3: vertical split of main pane (88% for git)
-        assert "-v -p 88" in commands[2]
+        assert "-v -l 88%" in commands[2]
         # 4: cctmux-git in bottom-left
         assert "cctmux-git" in commands[3]
         # 5: vertical split of right pane (23% for tasks)
-        assert "-v -p 23" in commands[4]
+        assert "-v -l 23%" in commands[4]
         # 6: cctmux-tasks -g in bottom-right
         assert "cctmux-tasks -g" in commands[5]
         # 7: focus main (top-left) pane
@@ -287,7 +287,7 @@ class TestApplyGitMonLayout:
         commands = apply_git_mon_layout("test-session", dry_run=True)
         assert len(commands) == 3
         # 1: horizontal split with 40% right
-        assert "-h -p 40" in commands[0]
+        assert "-h -l 40%" in commands[0]
         assert "-P" in commands[0]
         # 2: cctmux-git in right pane
         assert "cctmux-git" in commands[1]
@@ -342,7 +342,7 @@ class TestApplyCustomLayout:
         assert len(commands) == 2
         assert "split-window" in commands[0]
         assert "-h" in commands[0]
-        assert "-p 40" in commands[0]
+        assert "-l 40%" in commands[0]
         assert "select-pane" in commands[1]
 
     def test_split_with_command(self) -> None:

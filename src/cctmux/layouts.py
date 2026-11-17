@@ -22,8 +22,16 @@ def _run_tmux(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[s
 
     Returns:
         CompletedProcess result.
+
+    Raises:
+        RuntimeError: If the tmux command fails; includes tmux's stderr output.
     """
-    return subprocess.run(cmd, check=True, timeout=_TMUX_TIMEOUT, **kwargs)  # type: ignore[arg-type]
+    try:
+        return subprocess.run(cmd, check=True, timeout=_TMUX_TIMEOUT, **kwargs)  # type: ignore[arg-type]
+    except subprocess.CalledProcessError as e:
+        stderr = e.stderr if isinstance(e.stderr, str) else ""
+        detail = f": {stderr.strip()}" if stderr and stderr.strip() else ""
+        raise RuntimeError(f"tmux command failed (exit {e.returncode}): {' '.join(cmd)}{detail}") from e
 
 
 def _validate_pane_id(pane_id: str, context: str = "") -> None:
@@ -71,7 +79,7 @@ def apply_editor_layout(session_name: str, dry_run: bool = False) -> list[str]:
 
     # Split horizontally with 30% on the right
     # Use -d to keep focus on the original (left) pane where Claude runs
-    split_cmd = ["tmux", "split-window", "-d", "-t", session_name, "-h", "-p", "30"]
+    split_cmd = ["tmux", "split-window", "-d", "-t", session_name, "-h", "-l", "30%"]
     commands.append(" ".join(split_cmd))
     if not dry_run:
         _run_tmux(split_cmd)
@@ -93,7 +101,7 @@ def apply_monitor_layout(session_name: str, dry_run: bool = False) -> list[str]:
 
     # Split vertically with 20% on the bottom
     # Use -d to keep focus on the original (top) pane where Claude runs
-    split_cmd = ["tmux", "split-window", "-d", "-t", session_name, "-v", "-p", "20"]
+    split_cmd = ["tmux", "split-window", "-d", "-t", session_name, "-v", "-l", "20%"]
     commands.append(" ".join(split_cmd))
     if not dry_run:
         _run_tmux(split_cmd)
@@ -122,7 +130,7 @@ def apply_triple_layout(session_name: str, dry_run: bool = False) -> list[str]:
 
     # Split horizontally with 30% on the right
     # Use -d to keep focus on the original (left) pane, -P to get new pane ID
-    split_h_cmd = ["tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", session_name, "-h", "-p", "50"]
+    split_h_cmd = ["tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", session_name, "-h", "-l", "50%"]
     commands.append(" ".join(split_h_cmd))
 
     right_pane_id = ""
@@ -134,9 +142,9 @@ def apply_triple_layout(session_name: str, dry_run: bool = False) -> list[str]:
     # Split the right pane vertically (50/50) using the captured pane ID
     # Use -d to keep focus on main pane
     if dry_run:
-        split_v_cmd = ["tmux", "split-window", "-d", "-t", f"{session_name}:0.1", "-v", "-p", "50"]
+        split_v_cmd = ["tmux", "split-window", "-d", "-t", f"{session_name}:0.1", "-v", "-l", "50%"]
     else:
-        split_v_cmd = ["tmux", "split-window", "-d", "-t", right_pane_id, "-v", "-p", "50"]
+        split_v_cmd = ["tmux", "split-window", "-d", "-t", right_pane_id, "-v", "-l", "50%"]
     commands.append(" ".join(split_v_cmd))
     if not dry_run:
         _run_tmux(split_v_cmd)
@@ -175,7 +183,7 @@ def apply_cc_mon_layout(session_name: str, dry_run: bool = False) -> list[str]:
 
     # Split horizontally with 50% on the right, using -P to get the new pane ID
     # Use -d to keep focus on original pane during split
-    split_h_cmd = ["tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", session_name, "-h", "-p", "50"]
+    split_h_cmd = ["tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", session_name, "-h", "-l", "50%"]
     commands.append(" ".join(split_h_cmd))
 
     right_pane_id = ""
@@ -206,11 +214,11 @@ def apply_cc_mon_layout(session_name: str, dry_run: bool = False) -> list[str]:
             "-t",
             f"{session_name}:0.1",
             "-v",
-            "-p",
-            "50",
+            "-l",
+            "50%",
         ]
     else:
-        split_v_cmd = ["tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", right_pane_id, "-v", "-p", "50"]
+        split_v_cmd = ["tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", right_pane_id, "-v", "-l", "50%"]
     commands.append(" ".join(split_v_cmd))
 
     bottom_right_pane_id = ""
@@ -271,7 +279,7 @@ def apply_full_monitor_layout(session_name: str, dry_run: bool = False) -> list[
 
     # Split horizontally with 40% on the right, using -P to get the new pane ID
     # Use -d to keep focus on original pane during split
-    split_h_cmd = ["tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", session_name, "-h", "-p", "40"]
+    split_h_cmd = ["tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", session_name, "-h", "-l", "40%"]
     commands.append(" ".join(split_h_cmd))
 
     right_pane_id = ""
@@ -302,11 +310,11 @@ def apply_full_monitor_layout(session_name: str, dry_run: bool = False) -> list[
             "-t",
             f"{session_name}:0.1",
             "-v",
-            "-p",
-            "70",
+            "-l",
+            "70%",
         ]
     else:
-        split_v_cmd = ["tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", right_pane_id, "-v", "-p", "70"]
+        split_v_cmd = ["tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", right_pane_id, "-v", "-l", "70%"]
     commands.append(" ".join(split_v_cmd))
 
     middle_pane_id = ""
@@ -337,11 +345,11 @@ def apply_full_monitor_layout(session_name: str, dry_run: bool = False) -> list[
             "-t",
             f"{session_name}:0.2",
             "-v",
-            "-p",
-            "50",
+            "-l",
+            "50%",
         ]
     else:
-        split_v2_cmd = ["tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", middle_pane_id, "-v", "-p", "50"]
+        split_v2_cmd = ["tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", middle_pane_id, "-v", "-l", "50%"]
     commands.append(" ".join(split_v2_cmd))
 
     bottom_pane_id = ""
@@ -402,7 +410,7 @@ def apply_dashboard_layout(session_name: str, dry_run: bool = False) -> list[str
 
     # First, move Claude to a side pane - split with 30% on right
     # Use -d to keep focus on original pane during split
-    split_h_cmd = ["tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", session_name, "-h", "-p", "30"]
+    split_h_cmd = ["tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", session_name, "-h", "-l", "30%"]
     commands.append(" ".join(split_h_cmd))
 
     right_pane_id = ""
@@ -433,11 +441,11 @@ def apply_dashboard_layout(session_name: str, dry_run: bool = False) -> list[str
             "-t",
             f"{session_name}:0.1",
             "-v",
-            "-p",
-            "50",
+            "-l",
+            "50%",
         ]
     else:
-        split_v_cmd = ["tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", right_pane_id, "-v", "-p", "50"]
+        split_v_cmd = ["tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", right_pane_id, "-v", "-l", "50%"]
     commands.append(" ".join(split_v_cmd))
 
     bottom_right_pane_id = ""
@@ -499,7 +507,7 @@ def apply_ralph_layout(session_name: str, dry_run: bool = False) -> list[str]:
         _validate_pane_id(main_pane_id, "main pane")
 
     # Split horizontally with 40% on the right
-    split_h_cmd = ["tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", session_name, "-h", "-p", "40"]
+    split_h_cmd = ["tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", session_name, "-h", "-l", "40%"]
     commands.append(" ".join(split_h_cmd))
 
     right_pane_id = ""
@@ -566,7 +574,7 @@ def apply_ralph_full_layout(session_name: str, dry_run: bool = False) -> list[st
         _validate_pane_id(main_pane_id, "main pane")
 
     # Split horizontally 50/50 — right column for ralph monitor
-    split_h_cmd = ["tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", session_name, "-h", "-p", "50"]
+    split_h_cmd = ["tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", session_name, "-h", "-l", "50%"]
     commands.append(" ".join(split_h_cmd))
 
     right_pane_id = ""
@@ -596,8 +604,8 @@ def apply_ralph_full_layout(session_name: str, dry_run: bool = False) -> list[st
             "-t",
             f"{session_name}:0.0",
             "-v",
-            "-p",
-            "88",
+            "-l",
+            "88%",
         ]
     else:
         split_v_left_cmd = [
@@ -610,8 +618,8 @@ def apply_ralph_full_layout(session_name: str, dry_run: bool = False) -> list[st
             "-t",
             main_pane_id,
             "-v",
-            "-p",
-            "88",
+            "-l",
+            "88%",
         ]
     commands.append(" ".join(split_v_left_cmd))
 
@@ -642,8 +650,8 @@ def apply_ralph_full_layout(session_name: str, dry_run: bool = False) -> list[st
             "-t",
             f"{session_name}:0.2",
             "-v",
-            "-p",
-            "23",
+            "-l",
+            "23%",
         ]
     else:
         split_v_right_cmd = [
@@ -656,8 +664,8 @@ def apply_ralph_full_layout(session_name: str, dry_run: bool = False) -> list[st
             "-t",
             right_pane_id,
             "-v",
-            "-p",
-            "23",
+            "-l",
+            "23%",
         ]
     commands.append(" ".join(split_v_right_cmd))
 
@@ -717,7 +725,7 @@ def apply_git_mon_layout(session_name: str, dry_run: bool = False) -> list[str]:
         _validate_pane_id(main_pane_id, "main pane")
 
     # Split horizontally with 40% on the right
-    split_h_cmd = ["tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", session_name, "-h", "-p", "40"]
+    split_h_cmd = ["tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", "-t", session_name, "-h", "-l", "40%"]
     commands.append(" ".join(split_h_cmd))
 
     right_pane_id = ""
@@ -813,8 +821,8 @@ def apply_custom_layout(
             "-t",
             target_ref,
             direction_flag,
-            "-p",
-            str(split.size),
+            "-l",
+            f"{split.size}%",
         ]
         commands.append(" ".join(split_cmd))
 

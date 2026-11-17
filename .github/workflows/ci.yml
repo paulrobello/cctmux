@@ -5,16 +5,60 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      os-scope:
+        description: "Runner scope for the test matrix (verification runs); 'all' runs ubuntu + macOS."
+        type: choice
+        default: all
+        options: [all, ubuntu-latest, macos-latest]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
 
 jobs:
-  checkall:
+  # Scoped dispatch resolver: platform-independent concerns run once on
+  # ubuntu; only the test job carries the OS matrix. PRs run ubuntu only;
+  # pushes and 'all' dispatches run ubuntu + macOS, so a single-OS fix can
+  # be verified with one dispatch instead of a full run.
+  setup:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
+    outputs:
+      os-matrix: ${{ steps.os-scope.outputs.os-matrix }}
     steps:
-      - uses: actions/checkout@v7
+      - name: Resolve os scope
+        id: os-scope
+        env:
+          SCOPE: ${{ inputs.os-scope }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          case "$SCOPE" in
+            ubuntu-latest|macos-latest)
+              MATRIX="[$(jq -Rn --arg s "$SCOPE" '$s')]" ;;
+            *)
+              if [ "$EVENT" = "pull_request" ]; then
+                MATRIX='["ubuntu-latest"]'
+              else
+                MATRIX='["ubuntu-latest", "macos-latest"]'
+              fi ;;
+          esac
+          echo "os-matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "os-matrix=$MATRIX"
+
+  # Format, lint and typecheck are platform-independent: one ubuntu job.
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v8.2.0
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           enable-cache: true
 
@@ -29,6 +73,25 @@ jobs:
 
       - name: Type check
         run: uv run pyright src
+
+  test:
+    runs-on: ${{ matrix.os }}
+    needs: [setup]
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(needs.setup.outputs.os-matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --dev
 
       - name: Tests
         run: uv run pytest
